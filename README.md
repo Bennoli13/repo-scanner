@@ -62,6 +62,9 @@ Visit: http://localhost:5001
 ---
 
 ## 🧪 How to Use
+<img width="1511" alt="Screenshot 2025-04-06 at 3 51 14 PM" src="https://github.com/user-attachments/assets/c8f59f79-7f67-43db-a46f-92766d968a87" />
+<img width="1512" alt="image" src="https://github.com/user-attachments/assets/4807b542-442b-40d1-a09e-7943d3ed5912" />
+<img width="1511" alt="image" src="https://github.com/user-attachments/assets/311d090d-b804-49b6-bf20-144d1adca57c" />
 
 1. **Settings**  
    - Go to the **Settings** page to configure:
@@ -94,6 +97,7 @@ Visit: http://localhost:5001
         +----------------------------------------------+
                       Updates scan status to DB
 ```
+---
 
 # 📁 Project Structure
 ```
@@ -106,12 +110,15 @@ repo-scanner/
 ├── docker-compose.yml
 └── scan.html            # Frontend config page
 ```
+---
 
 # 📖 Roadmap
 * Add support for more scanners (e.g., Gitleaks, Bandit)
 * Schedule scans (cron-based)
 * Alerting via Slack/Email
 * Scan result visualization in dashboard
+
+---
 
 # 🤝 Contributions
 PRs and issues are welcome! Please open a discussion if you want to contribute a new scanner or integration.
