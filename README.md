@@ -60,6 +60,7 @@ docker-compose up --scale worker=5 --build
 Visit: http://localhost:5001
 
 # 🔧 Architecture Overview
+```
 +------------+        +--------------------+       +---------------+
 |  Flask Web | -----> |  RabbitMQ Queue    | --->  |  Worker(s)    |
 |  (Frontend)|        |  (scanner_jobs)    |       |  (Scanner +   |
@@ -68,8 +69,10 @@ Visit: http://localhost:5001
         |                                              |
         +----------------------------------------------+
                       Updates scan status to DB
+```
 
 # 📁 Project Structure
+```
 repo-scanner/
 ├── app/                 # Flask app
 ├── worker/              # Worker scripts
@@ -78,12 +81,13 @@ repo-scanner/
 ├── Dockerfile
 ├── docker-compose.yml
 └── scan.html            # Frontend config page
+```
 
 # 📖 Roadmap
- [] Add support for more scanners (e.g., Gitleaks, Bandit)
- [] Schedule scans (cron-based)
- [] Alerting via Slack/Email
- [] Scan result visualization in dashboard
+[] Add support for more scanners (e.g., Gitleaks, Bandit)
+[] Schedule scans (cron-based)
+[] Alerting via Slack/Email
+[] Scan result visualization in dashboard
 
 # 🤝 Contributions
 PRs and issues are welcome! Please open a discussion if you want to contribute a new scanner or integration.
