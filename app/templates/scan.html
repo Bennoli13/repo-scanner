@@ -1,0 +1,150 @@
+{% extends "layout.html" %}
+{% block title %}Scan{% endblock %}
+{% block content %}
+<h2 class="mb-4">Trigger Scan</h2>
+
+<!-- Git Source Selection -->
+<div class="mb-3">
+  <label for="source_id" class="form-label">Git Source</label>
+  <select id="source_id" class="form-select" onchange="loadReposForScan()">
+    <option value="">-- Select Git Source --</option>
+    {% for src in sources %}
+      <option value="{{ src.id }}">{{ src.platform }} - {{ src.base_url }}</option>
+    {% endfor %}
+  </select>
+</div>
+
+<!-- Scanners -->
+<div class="mb-3">
+<label for="scanner_id" class="form-label">Scanners</label>
+<select id="scanner_id" class="form-select">
+    <option value="">-- Select Scanners --</option>
+        <option id="scanner_trivy" value="trivy" >Trivy</option>
+        <option id="scanner_trufflehog" value="trufflehog">Trufflehog</option>
+</select>
+</div>
+
+<!-- Repos -->
+<div id="scanControls" style="display: none;">
+  <!-- Repos -->
+  <div class="mb-3">
+    <label class="form-label">Select Repositories</label>
+    <div class="mb-2">
+      <input type="checkbox" id="select_all_repos" class="form-check-input" onchange="toggleSelectAllRepos(this)">
+      <label class="form-check-label" for="select_all_repos">Select All</label>
+    </div>
+    <div id="repoList" class="form-check border rounded p-3" style="max-height: 300px; overflow-y: auto;"></div>
+  </div>
+
+  <button class="btn btn-success" onclick="startScan()">🚀 Start Scan</button>
+</div>
+
+<!-- Scan Results -->
+<hr>
+<h4 class="mt-4">Scan Status</h4>
+<div id="scanStatusContainer"></div>
+
+<script>
+    let scanStatusTimer;
+
+    function startAutoRefresh(sourceId) {
+        clearInterval(scanStatusTimer); // clear previous timers
+        scanStatusTimer = setInterval(() => {
+        loadScanStatus(sourceId);
+        }, 5000);
+    }
+
+  async function loadReposForScan() {
+    const sourceId = document.getElementById("source_id").value;
+    const repoList = document.getElementById("repoList");
+    const controls = document.getElementById("scanControls");
+    const statusContainer = document.getElementById("scanStatusContainer");
+
+    if (!sourceId) {
+      controls.style.display = "none";
+      repoList.innerHTML = "";
+      statusContainer.innerHTML = "";
+      return;
+    }
+
+    const res = await fetch(`/api/repos/source/${sourceId}`);
+    const repos = await res.json();
+    repoList.innerHTML = "";
+
+    if (repos.length > 0) {
+      repos.forEach(repo => {
+        const div = document.createElement("div");
+        div.className = "form-check";
+        div.innerHTML = `
+          <input class="form-check-input" type="checkbox" name="repo_ids" value="${repo.id}" id="repo_${repo.id}">
+          <label class="form-check-label" for="repo_${repo.id}">${repo.name}</label>
+        `;
+        repoList.appendChild(div);
+      });
+      controls.style.display = "block";
+    } else {
+      controls.style.display = "none";
+    }
+
+    loadScanStatus(sourceId);
+    startAutoRefresh(sourceId);
+  }
+
+  function toggleSelectAllRepos(checkbox) {
+    const checkboxes = document.querySelectorAll("input[name='repo_ids']");
+    checkboxes.forEach(cb => cb.checked = checkbox.checked);
+  }
+
+  async function startScan() {
+    const sourceId = document.getElementById("source_id").value;
+    const repoIds = Array.from(document.querySelectorAll("input[name='repo_ids']:checked")).map(el => el.value);
+    const scanner = document.getElementById("scanner_id").value;
+
+    if (repoIds.length === 0 || !scanner) {
+        alert("Please select at least one repo and one scanner.");
+        return;
+    }
+
+    const res = await fetch("/api/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source_id: sourceId, repo_ids: repoIds, scanners: [scanner] })
+    });
+
+    if (res.ok) {
+      alert("Scan triggered!");
+      loadScanStatus(sourceId);
+      startAutoRefresh(sourceId);
+    } else {
+      alert("Failed to trigger scan.");
+    }
+  }
+
+  async function loadScanStatus(sourceId) {
+    const res = await fetch(`/api/scan/status?source_id=${sourceId}`);
+    const jobs = await res.json();
+    const container = document.getElementById("scanStatusContainer");
+
+    if (jobs.length === 0) {
+      container.innerHTML = "<p>No scans yet.</p>";
+      return;
+    }
+
+    container.innerHTML = `
+      <table class="table table-bordered table-sm">
+        <thead><tr><th>Repo</th><th>Scanner</th><th>Status</th><th>Last Updated</th></tr></thead>
+        <tbody>
+          ${jobs.map(job => `
+            <tr>
+              <td>${job.repo_name}</td>
+              <td>${job.scanner_name}</td>
+              <td>${job.status}</td>
+              <td>${job.updated_at}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+</script>
+{% endblock %}
