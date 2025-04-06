@@ -59,6 +59,30 @@ docker-compose up --scale worker=5 --build
 4. Access Web UI
 Visit: http://localhost:5001
 
+---
+
+## 🧪 How to Use
+
+1. **Settings**  
+   - Go to the **Settings** page to configure:
+     - GitHub / GitLab base URL, access token, and username
+     - DefectDojo API URL and token
+
+2. **Repos**  
+   - Navigate to **Repos** to:
+     - Add the repositories you want to scan
+     - Associate them with the configured Git source
+
+3. **Scan**  
+   - Head over to the **Scan** page to:
+     - Select repos and the scanner (TruffleHog or Trivy)
+     - Click "Scan Now" to trigger scanning
+     - The scan job will be queued and processed automatically
+
+4. **Status**  
+   - Check scan status updates under the **Repos** list
+   - Findings will appear in your DefectDojo dashboard
+
 # 🔧 Architecture Overview
 ```
 +------------+        +--------------------+       +---------------+
@@ -84,10 +108,10 @@ repo-scanner/
 ```
 
 # 📖 Roadmap
-[] Add support for more scanners (e.g., Gitleaks, Bandit)
-[] Schedule scans (cron-based)
-[] Alerting via Slack/Email
-[] Scan result visualization in dashboard
+* Add support for more scanners (e.g., Gitleaks, Bandit)
+* Schedule scans (cron-based)
+* Alerting via Slack/Email
+* Scan result visualization in dashboard
 
 # 🤝 Contributions
 PRs and issues are welcome! Please open a discussion if you want to contribute a new scanner or integration.
