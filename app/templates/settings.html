@@ -1,0 +1,148 @@
+{% extends "layout.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h2 class="mb-4">Settings</h2>
+
+<!-- Git Config Form -->
+<h4>Add Git Config</h4>
+<div class="card mb-4 shadow-sm">
+  <div class="card-body">
+    <form id="addGitConfig">
+      <div class="row g-3 mb-2">
+        <div class="col-md-3">
+          <label class="form-label" for="platform">Platform</label>
+          <select class="form-select" id="platform" data-bs-toggle="tooltip" title="Select GitHub or GitLab">
+            <option value="github">GitHub</option>
+            <option value="gitlab">GitLab</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="label_name">Label Name</label>
+          <input type="text" class="form-control" id="label_name" placeholder="e.g. Internal Tools" data-bs-toggle="tooltip" title="Used as product name in DefectDojo">
+        </div>
+        <div class="col-md-5">
+          <label class="form-label" for="base_url">Base URL</label>
+          <input type="text" class="form-control" id="base_url" placeholder="https://github.com" data-bs-toggle="tooltip" title="Base URL of Git host">
+        </div>
+      </div>
+
+      <div class="row g-3 mt-1">
+        <div class="col-md-4">
+          <label class="form-label" for="username">Username</label>
+          <input type="text" class="form-control" id="username" placeholder="e.g. git-bot" data-bs-toggle="tooltip" title="Used to authenticate with the token">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="token">Access Token</label>
+          <input type="text" class="form-control" id="token" placeholder="Paste personal access token" data-bs-toggle="tooltip" title="Stored securely and encrypted">
+        </div>
+        <div class="col-md-2 d-grid align-items-end">
+          <button type="submit" class="btn btn-primary">Add</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Git Config List -->
+<h5 class="mt-4">Git Configs</h5>
+<ul class="list-group" id="gitConfigList">
+  <!-- JS will populate this -->
+</ul>
+
+<hr>
+
+<!-- DefectDojo Config -->
+<h4 class="mt-5">DefectDojo Config</h4>
+<form id="defectdojoForm">
+  <div class="mb-3">
+    <input type="text" class="form-control" id="dojo_url" placeholder="DefectDojo URL" value="{{ dojo.url or '' }}">
+  </div>
+  <div class="mb-3 position-relative">
+    <input type="password" class="form-control" id="dojo_token" placeholder="DefectDojo Token" value="{{ dojo.token or '' }}">
+    <button type="button" class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0" style="margin: 5px;" onclick="toggleToken()">👁️</button>
+  </div>
+  <button class="btn btn-success">Save</button>
+</form>
+
+<!-- JS Script -->
+<script>
+  function toggleToken() {
+    const input = document.getElementById("dojo_token");
+    input.type = input.type === "password" ? "text" : "password";
+  }
+
+  async function loadConfigs() {
+    const res = await fetch("/api/settings");
+    const data = await res.json();
+    const list = document.getElementById("gitConfigList");
+    list.innerHTML = "";
+
+    data.forEach(cfg => {
+      const li = document.createElement("li");
+      li.className = "list-group-item d-flex justify-content-between align-items-center";
+      li.innerHTML = `
+        <div>
+          <strong>${cfg.platform}</strong> | <strong>[${cfg.label_name || "Unnamed"}]</strong><br>
+          <small>${cfg.base_url}</small>
+        </div>
+        <button class="btn btn-sm btn-danger" onclick="deleteConfig(${cfg.id})">Delete</button>
+      `;
+      list.appendChild(li);
+    });
+  }
+
+  async function deleteConfig(id) {
+    if (!confirm("Delete this config?")) return;
+    await fetch("/api/settings?id=" + id, { method: "DELETE" });
+    loadConfigs();
+  }
+
+  document.getElementById("addGitConfig").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const payload = {
+      username: document.getElementById("username").value,
+      platform: document.getElementById("platform").value,
+      label_name: document.getElementById("label_name").value,
+      base_url: document.getElementById("base_url").value,
+      token: document.getElementById("token").value,
+    };
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      document.getElementById("addGitConfig").reset();
+      loadConfigs();
+    } else {
+      alert("Failed to add config");
+    }
+  });
+
+  document.getElementById("defectdojoForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const payload = {
+      url: document.getElementById("dojo_url").value,
+      token: document.getElementById("dojo_token").value
+    };
+    const res = await fetch("/api/defectdojo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      alert("DefectDojo config updated!");
+    } else {
+      alert("Failed to save DefectDojo config.");
+    }
+  });
+  loadConfigs();  // load list on page load
+
+  // Activate Bootstrap tooltips
+  document.addEventListener("DOMContentLoaded", function () {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
+  });
+  
+</script>
+{% endblock %}

@@ -1,0 +1,92 @@
+{% extends "layout.html" %}
+{% block title %}Repo List{% endblock %}
+{% block content %}
+<h2 class="mb-4">Repo Management</h2>
+
+<!-- Add Repos -->
+<h4>Add Repositories</h4>
+<form id="repoForm">
+  <div class="row g-3 align-items-center mb-3">
+    <div class="col-md-4">
+        <select id="source_id" class="form-select" required onchange="loadRepos()">
+            <option value="">-- Select Git Source --</option>
+            {% for src in sources %}
+              <option value="{{ src.id }}">{{ src.platform }} - {{ src.base_url }}</option>
+            {% endfor %}
+          </select>
+    </div>
+    <div class="col-md-6">
+      <textarea id="repo_list" class="form-control" rows="3" placeholder="One repo per line..." required></textarea>
+    </div>
+    <div class="col-md-2 d-grid">
+      <button class="btn btn-primary">Add</button>
+    </div>
+  </div>
+</form>
+
+<!-- Existing Repos -->
+<hr>
+<h4 class="mt-4">Existing Repositories</h4>
+<div id="repoTableContainer"></div>
+
+<script>
+    async function loadRepos() {
+        const sourceId = document.getElementById("source_id").value;
+        const container = document.getElementById("repoTableContainer");
+        container.innerHTML = "";
+      
+        if (!sourceId) return;
+      
+        const res = await fetch(`/api/repos/source/${sourceId}`);
+        const repos = await res.json();
+      
+        if (repos.length === 0) {
+          container.innerHTML = "<p>No repositories for this Git source.</p>";
+          return;
+        }
+      
+        const table = document.createElement("table");
+        table.className = "table table-bordered";
+        table.innerHTML = `
+          <thead><tr><th>ID</th><th>Name</th><th>Action</th></tr></thead>
+          <tbody>
+            ${repos.map(r => `
+              <tr>
+                <td>${r.id}</td>
+                <td>${r.name}</td>
+                <td><button class="btn btn-sm btn-danger" onclick="deleteRepo(${r.id})">Delete</button></td>
+              </tr>`).join("")}
+          </tbody>
+        `;
+      
+        container.appendChild(table);
+      }      
+
+  async function deleteRepo(id) {
+    if (!confirm("Delete this repository?")) return;
+    await fetch(`/api/repos/${id}`, { method: "DELETE" });
+    loadRepos();
+  }
+
+  document.getElementById("repoForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const sourceId = document.getElementById("source_id").value;
+    const repoList = document.getElementById("repo_list").value.trim().split("\n").filter(r => r);
+
+    const res = await fetch("/api/repos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source_id: sourceId, repos: repoList })
+    });
+
+    if (res.ok) {
+      document.getElementById("repoForm").reset();
+      loadRepos();
+    } else {
+      alert("Failed to add repos");
+    }
+  });
+
+  loadRepos();
+</script>
+{% endblock %}
