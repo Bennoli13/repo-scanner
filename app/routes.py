@@ -385,16 +385,20 @@ def create_schedule():
     source_id = data.get("source_id")
     repo_id = data.get("repo_id")  # May be null for 'all'
     scanner_name = data.get("scanner_name")
-    frequency = data.get("frequency")
+    cron_day = data.get("cron_day")
+    cron_hour = data.get("cron_hour")
+    cron_minute = data.get("cron_minute")
 
-    if not all([source_id, scanner_name, frequency]):
+    if not all([source_id, scanner_name, cron_day, cron_hour, cron_minute]):
         return jsonify({"error": "Missing required fields"}), 400
 
     new_schedule = ScheduledScan(
         source_id=source_id,
         repo_id=repo_id,  # can be None
         scanner_name=scanner_name,
-        frequency=frequency
+        cron_day=cron_day,
+        cron_hour=cron_hour,
+        cron_minute=cron_minute,
     )
     db.session.add(new_schedule)
     db.session.commit()
@@ -412,7 +416,9 @@ def list_schedules():
             "source_label": s.source.label_name,
             "repo_name": s.repo.name if s.repo else "All Repos",
             "scanner_name": s.scanner_name,
-            "frequency": s.frequency,
+            "cron_day": s.cron_day,
+            "cron_hour": s.cron_hour,
+            "cron_minute": s.cron_minute,
             "last_run": s.last_run.isoformat() if s.last_run else None
         })
     return jsonify(result)
