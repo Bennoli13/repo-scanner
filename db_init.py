@@ -1,5 +1,5 @@
 from app import create_app, db
-from app.models import DefectDojoConfig, GitSourceConfig, Repository
+from app.models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan
 
 app = create_app()
 with app.app_context():
