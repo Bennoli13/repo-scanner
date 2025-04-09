@@ -65,7 +65,6 @@ def register_all_scheduled_jobs():
     with app.app_context():
         scans = ScheduledScan.query.all()
         db_ids = {f"scan-{scan.id}" for scan in scans}
-        scheduled_ids = set(scheduler.get_jobs())
         scheduled_ids = {job.id for job in scheduler.get_jobs() if job.id != "auto-sync"}
 
         # Remove orphaned jobs
