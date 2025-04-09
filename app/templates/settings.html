@@ -64,6 +64,66 @@
   <button class="btn btn-success">Save</button>
 </form>
 
+
+<!-- Scheduler Config -->
+<hr>
+<h4 class="mt-5">Scheduled Scans</h4>
+<form id="scheduleForm" class="mb-4">
+  <div class="row g-3">
+    <div class="col-md-3">
+      <label class="form-label">Git Source</label>
+      <select id="schedule_source" class="form-select" required></select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Repository</label>
+      <select id="schedule_repo" class="form-select"></select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Scanner</label>
+      <select id="schedule_scanner" class="form-select">
+        <option value="trufflehog">TruffleHog</option>
+        <option value="trivy">Trivy</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Day</label>
+      <select id="cron_day" class="form-select">
+        <option value="*">Every day</option>
+        <option value="mon">Monday</option>
+        <option value="tue">Tuesday</option>
+        <option value="wed">Wednesday</option>
+        <option value="thu">Thursday</option>
+        <option value="fri">Friday</option>
+        <option value="sat">Saturday</option>
+        <option value="sun">Sunday</option>
+      </select>
+    </div>
+    
+    <div class="col-md-2">
+      <label class="form-label">Hour</label>
+      <input type="number" id="cron_hour" class="form-control" min="0" max="23" value="9">
+    </div>
+    
+    <div class="col-md-2">
+      <label class="form-label">Minute</label>
+      <input type="number" id="cron_minute" class="form-control" min="0" max="59" value="0">
+    </div>
+    <div class="col-md-2 d-grid align-items-end">
+      <button type="submit" class="btn btn-primary">Add Schedule</button>
+    </div>
+  </div>
+</form>
+
+<table class="table table-bordered table-sm" id="scheduleTable">
+  <thead>
+    <tr>
+      <th>Source</th><th>Repo</th><th>Scanner</th><th>Frequency</th><th>Last Run</th><th></th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+
 <!-- JS Script -->
 <script>
   function toggleToken() {
@@ -143,6 +203,90 @@
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
   });
-  
+</script>
+<!-- JS for Scheduler -->
+<script>
+  async function loadGitSources() {
+    const res = await fetch("/api/settings");
+    const sources = await res.json();
+    const srcSelect = document.getElementById("schedule_source");
+    srcSelect.innerHTML = '<option value="">Select</option>';
+    sources.forEach(src => {
+      const opt = document.createElement("option");
+      opt.value = src.id;
+      opt.textContent = `${src.platform} - ${src.label_name}`;
+      srcSelect.appendChild(opt);
+    });
+  }
+
+  async function loadReposForSource(sourceId) {
+    const repoSelect = document.getElementById("schedule_repo");
+    repoSelect.innerHTML = '<option value="">All Repos</option>'; // support all
+    if (!sourceId) return;
+    const res = await fetch(`/api/repos/source/${sourceId}`);
+    const repos = await res.json();
+    repos.forEach(r => {
+      const opt = document.createElement("option");
+      opt.value = r.id;
+      opt.textContent = r.name;
+      repoSelect.appendChild(opt);
+    });
+  }
+
+  async function loadSchedules() {
+    const res = await fetch("/api/schedule");
+    const data = await res.json();
+    const tbody = document.querySelector("#scheduleTable tbody");
+    tbody.innerHTML = "";
+    data.forEach(s => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${s.source_label}</td>
+        <td>${s.repo_name}</td>
+        <td>${s.scanner_name}</td>
+        <td>${s.frequency}</td>
+        <td>${s.last_run || "-"}</td>
+        <td><button class="btn btn-sm btn-danger" onclick="deleteSchedule(${s.id})">Delete</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function deleteSchedule(id) {
+    if (!confirm("Delete this scheduled scan?")) return;
+    await fetch(`/api/schedule/${id}`, { method: "DELETE" });
+    loadSchedules();
+  }
+
+  document.getElementById("scheduleForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const payload = {
+      source_id: document.getElementById("schedule_source").value,
+      repo_id: document.getElementById("schedule_repo").value,
+      scanner_name: document.getElementById("schedule_scanner").value,
+      cron_day: document.getElementById("cron_day").value,
+      cron_hour: parseInt(document.getElementById("cron_hour").value),
+      cron_minute: parseInt(document.getElementById("cron_minute").value)
+    };
+    const res = await fetch("/api/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      document.getElementById("scheduleForm").reset();
+      loadSchedules();
+    } else {
+      alert("Failed to create schedule");
+    }
+  });
+
+  document.getElementById("schedule_source").addEventListener("change", e => {
+    loadReposForSource(e.target.value);
+  });
+
+  // Load sources and existing schedules
+  loadGitSources();
+  loadSchedules();
 </script>
 {% endblock %}

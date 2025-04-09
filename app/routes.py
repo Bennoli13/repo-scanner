@@ -1,11 +1,17 @@
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, Flask, send_file, send_from_directory
 from . import db
-from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob
+from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan
 from .utils import encrypt_token, decrypt_token, push_scan_job_to_queue
 
 from sqlalchemy import and_
 from datetime import datetime
 
+from werkzeug.utils import secure_filename
+import zipfile
+import shutil
+import os
+
+FILE_UPLOAD_BASE= "/app/files"
 main = Blueprint("main", __name__)
 
 # ------------------------------
@@ -29,6 +35,28 @@ def repos():
 def scan():
     git_sources = GitSourceConfig.query.all()
     return render_template("scan.html", sources=git_sources)
+
+@main.route("/result/<scanner>")
+def view_results(scanner):
+    if scanner not in ["trufflehog", "trivy"]:
+        return "Invalid scanner", 404
+
+    folder = os.path.join("files", scanner)
+    if not os.path.exists(folder):
+        return render_template("result.html", scanner=scanner, files=[])
+
+    files = [f for f in os.listdir(folder) if f.endswith(".json")]
+    return render_template("result.html", scanner=scanner, files=files)
+
+# ------------------------------
+# Files: Download
+# ------------------------------
+@main.route("/files/<scanner>/<filename>")
+def serve_uploaded_file(scanner, filename):
+    if scanner not in ["trufflehog", "trivy"]:
+        return "Invalid scanner", 404
+    folder = os.path.join(FILE_UPLOAD_BASE, scanner)
+    return send_from_directory(folder, filename, as_attachment=True)
 
 # ------------------------------
 # API: Git Configs
@@ -171,11 +199,18 @@ def trigger_scan_jobs():
     repo_ids = data.get("repo_ids", [])
     scanners = data.get("scanners", [])
 
-    if not source_id or not repo_ids or not scanners:
-        return jsonify({"error": "Missing data"}), 400
+    if not source_id or not scanners:
+        return jsonify({"error": "Missing source_id or scanners"}), 400
+
+    # If repo_ids is empty, get all repos from this source
+    if not repo_ids:
+        repo_ids = [r.id for r in Repository.query.filter_by(source_id=source_id).all()]
+        if not repo_ids:
+            return jsonify({"error": "No repositories found for this source"}), 404
 
     now = datetime.utcnow()
     message_list = []
+
     for repo_id in repo_ids:
         for scanner_name in scanners:
             job = ScannerJob.query.filter_by(
@@ -204,12 +239,13 @@ def trigger_scan_jobs():
                 "source_id": source_id
             }
             message_list.append(message)
+
     db.session.commit()
 
     # Push message to RabbitMQ
     for message in message_list:
         push_scan_job_to_queue(message)
-        
+
     return jsonify({"message": "Scan jobs queued"}), 200
 
 @main.route("/api/scan/status", methods=["GET"])
@@ -274,3 +310,118 @@ def scan_job_detail(job_id):
             "token": dojo.token if dojo else ""
         }
     })
+# ------------------------------
+# API: File Upload
+# ------------------------------
+@main.route("/api/upload", methods=["POST"])
+def handle_file_upload():
+    file = request.files.get("file")
+    scanner = request.form.get("scanner_name")
+    repo = request.form.get("repo_name")
+    date_str = datetime.utcnow()
+    unique_id = request.form.get("unique_id")
+
+    if not file or not scanner or not repo:
+        return jsonify({"error": "Missing required parameters."}), 400
+
+    if scanner not in ["trufflehog", "trivy"]:
+        return jsonify({"error": "Unsupported scanner."}), 400
+
+    folder_path = os.path.join(FILE_UPLOAD_BASE, scanner)
+    os.makedirs(folder_path, exist_ok=True)
+
+    filename = f"{date_str}_{repo}_{unique_id}.json"
+    file_path = os.path.join(folder_path, secure_filename(filename))
+    file.save(file_path)
+
+    return jsonify({"message": "File uploaded successfully.", "path": file_path}), 200
+
+@main.route("/api/download/<scanner>", methods=["GET"])
+def download_by_scanner(scanner):
+    if scanner not in ["trufflehog", "trivy"]:
+        return jsonify({"error": "Unsupported scanner."}), 400
+
+    folder_path = os.path.join(FILE_UPLOAD_BASE, scanner)
+    if not os.path.exists(folder_path):
+        return jsonify({"error": f"No data found for scanner: {scanner}"}), 404
+
+    zip_filename = f"{scanner}_scans.zip"
+    zip_path = os.path.join(FILE_UPLOAD_BASE, zip_filename)
+
+    with zipfile.ZipFile(zip_path, "w") as zipf:
+        for root, _, files in os.walk(folder_path):
+            for file in files:
+                if file.endswith(".json"):
+                    abs_path = os.path.join(root, file)
+                    arcname = os.path.relpath(abs_path, FILE_UPLOAD_BASE)
+                    zipf.write(abs_path, arcname)
+
+    return send_file(zip_path, as_attachment=True)
+
+@main.route("/api/clear/<scanner>", methods=["DELETE"])
+def clear_all(scanner):
+    if scanner not in ["trufflehog", "trivy", "all"]:
+        return jsonify({"error": "Unsupported scanner."}), 400
+    if scanner == "all":
+        for scanner in ["trufflehog", "trivy"]:
+            folder_path = os.path.join(FILE_UPLOAD_BASE, scanner)
+            if os.path.exists(folder_path):
+                shutil.rmtree(folder_path)
+                os.makedirs(folder_path)
+    else:
+        folder_path = os.path.join(FILE_UPLOAD_BASE, scanner)
+        if os.path.exists(folder_path):
+            shutil.rmtree(folder_path)
+            os.makedirs(folder_path)
+    return jsonify({"message": "All uploaded files cleared."}), 200
+
+# ------------------------------
+# API: Scheduler
+# ------------------------------
+# API route to create a scheduled scan
+@main.route("/api/schedule", methods=["POST"])
+def create_schedule():
+    data = request.get_json()
+    source_id = data.get("source_id")
+    repo_id = data.get("repo_id")  # May be null for 'all'
+    scanner_name = data.get("scanner_name")
+    frequency = data.get("frequency")
+
+    if not all([source_id, scanner_name, frequency]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    new_schedule = ScheduledScan(
+        source_id=source_id,
+        repo_id=repo_id,  # can be None
+        scanner_name=scanner_name,
+        frequency=frequency
+    )
+    db.session.add(new_schedule)
+    db.session.commit()
+    return jsonify({"message": "Scheduled scan created"}), 201
+
+
+# API route to list all scheduled scans
+@main.route("/api/schedule", methods=["GET"])
+def list_schedules():
+    schedules = ScheduledScan.query.all()
+    result = []
+    for s in schedules:
+        result.append({
+            "id": s.id,
+            "source_label": s.source.label_name,
+            "repo_name": s.repo.name if s.repo else "All Repos",
+            "scanner_name": s.scanner_name,
+            "frequency": s.frequency,
+            "last_run": s.last_run.isoformat() if s.last_run else None
+        })
+    return jsonify(result)
+
+
+# API route to delete a schedule
+@main.route("/api/schedule/<int:schedule_id>", methods=["DELETE"])
+def delete_schedule(schedule_id):
+    s = ScheduledScan.query.get_or_404(schedule_id)
+    db.session.delete(s)
+    db.session.commit()
+    return jsonify({"message": "Scheduled scan deleted"})

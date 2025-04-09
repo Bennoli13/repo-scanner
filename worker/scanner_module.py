@@ -74,6 +74,23 @@ def upload_to_defectdojo(token, dojo_url, engagement_id, file_path, tags, scan_t
     res = requests.post(f"{dojo_url}/api/v2/import-scan/", headers=headers, files=files, data=data)
     logger.info(f"Upload response: {res.status_code}")
     files["file"].close()
-    if os.path.exists(file_path):
-        os.remove(file_path)
     return res.ok
+
+def upload_to_flask_app(file_path, unique_id, scanner_name, repo_name, flask_api_url):
+    try:
+        with open(file_path, "rb") as f:
+            files = {"file": f}
+            data = {
+                "scanner_name": scanner_name,
+                "repo_name": repo_name,
+                "unique_id": unique_id,
+            }
+            response = requests.post(f"{flask_api_url}/api/upload", files=files, data=data)
+        if response.ok:
+            logger.info(f"📤 Uploaded scan file to Flask app for {repo_name}")
+        else:
+            logger.warning(f"⚠️ Failed to upload scan file to Flask app: {response.text}")
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    except Exception as e:
+        logger.error(f"❌ Exception during Flask file upload: {str(e)}")

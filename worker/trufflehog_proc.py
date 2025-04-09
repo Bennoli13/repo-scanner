@@ -12,6 +12,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+API_BASE = os.environ.get("API_BASE")
 RESULT_DIR = "./results"
 os.makedirs(RESULT_DIR, exist_ok=True)
 
@@ -42,12 +43,14 @@ def scan_repo(repo_url, branch, repo_name, output_file):
     return True, output_file
 
 def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, engagement_id):
-    unique_file = os.path.join(RESULT_DIR, f"{uuid.uuid4().hex[:8]}.json")
+    unique_id = uuid.uuid4().hex[:8]
+    unique_file = os.path.join(RESULT_DIR, f"{unique_id}.json")
     success, file_path = scan_repo(repo_url, branch, repo_name, unique_file)
     if success:
         uploaded = scanner_module.upload_to_defectdojo(dojo_token, dojo_url, engagement_id, file_path, tags=[branch, "trufflehog"], scan_type="Trufflehog Scan")
         if uploaded:
             logger.info(f"✅ Uploaded findings for branch {branch}.")
+            scanner_module.upload_to_flask_app(file_path,unique_id,"trufflehog",repo_name,API_BASE)
         else:
             logger.info(f"❌ Failed to upload findings for branch {branch}.")
     else:
@@ -78,7 +81,7 @@ def main(data):
     product_id = scanner_module.get_or_create_product(dojo_token, dojo_url, label_name)
     engagement_id = scanner_module.get_or_create_engagement(dojo_token, dojo_url, product_id, repo_name)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         futures = [executor.submit(
             scan_and_upload_branch, full_url, branch, repo_name, dojo_token, dojo_url, engagement_id
         ) for branch in branches]

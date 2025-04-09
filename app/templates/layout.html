@@ -17,6 +17,15 @@
         <li class="nav-item"><a class="nav-link" href="/settings">Settings</a></li>
         <li class="nav-item"><a class="nav-link" href="/repos">Repos</a></li>
         <li class="nav-item"><a class="nav-link" href="/scan">Scan</a></li>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="resultDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            Result
+          </a>
+          <ul class="dropdown-menu" aria-labelledby="resultDropdown">
+            <li><a class="dropdown-item" href="/result/trufflehog">TruffleHog</a></li>
+            <li><a class="dropdown-item" href="/result/trivy">Trivy</a></li>
+          </ul>
+        </li>
       </ul>
     </div>
     <button class="btn btn-sm btn-outline-light" onclick="toggleTheme()" id="themeToggle">🌙 Dark Mode</button>

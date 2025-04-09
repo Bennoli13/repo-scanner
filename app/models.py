@@ -29,3 +29,16 @@ class ScannerJob(db.Model):
     status = db.Column(db.String(50), default="pending")
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now())
+
+class ScheduledScan(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    source_id = db.Column(db.Integer, db.ForeignKey("git_source_config.id"), nullable=False)
+    repo_id = db.Column(db.Integer, db.ForeignKey("repository.id"), nullable=True)  # null = all repos
+    scanner_name = db.Column(db.String(50), nullable=False)
+    cron_day = db.Column(db.String(10))     # e.g. 'mon', '*'
+    cron_hour = db.Column(db.Integer)       # 0–23
+    cron_minute = db.Column(db.Integer)     # 0–59
+    last_run = db.Column(db.DateTime)
+
+    source = db.relationship("GitSourceConfig", backref=db.backref("scheduled_scans", cascade="all, delete"))
+    repo = db.relationship("Repository", backref=db.backref("scheduled_scans", cascade="all, delete"))

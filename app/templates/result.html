@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+{% block title %}{{ scanner|capitalize }} Results{% endblock %}
+{% block content %}
+<h2>{{ scanner|capitalize }} Results</h2>
+
+<div class="mb-3">
+  <a href="/api/download/{{ scanner }}" class="btn btn-primary me-2">⬇️ Download All (ZIP)</a>
+  <button class="btn btn-danger" onclick="clearAll()">🗑️ Clear All Findings</button>
+</div>
+
+{% if files %}
+<table class="table table-striped table-bordered">
+  <thead>
+    <tr>
+      <th>Filename</th>
+      <th style="width: 100px;">Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for file in files %}
+    <tr>
+      <td>{{ file }}</td>
+      <td><a href="/files/{{ scanner }}/{{ file }}" class="btn btn-sm btn-outline-success" download>Download</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="text-muted">No findings yet.</p>
+{% endif %}
+
+<script>
+  function clearAll() {
+    if (!confirm("Are you sure you want to delete all {{ scanner }} results?")) return;
+    fetch("/api/clear/{{ scanner }}", { method: "DELETE" })
+      .then(res => {
+        if (res.ok) {
+          alert("All findings cleared.");
+          location.reload();
+        } else {
+          alert("Failed to clear findings.");
+        }
+      });
+  }
+</script>
+{% endblock %}

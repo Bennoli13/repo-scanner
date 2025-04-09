@@ -6,3 +6,4 @@ pika
 cryptography
 python-dotenv
 requests 
+APScheduler
