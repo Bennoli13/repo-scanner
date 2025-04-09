@@ -42,12 +42,16 @@ def scan_repo(repo_url, branch, repo_name, output_file):
     logger.info(f"Scan complete: {output_file}")
     return True, output_file
 
-def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, engagement_id):
+def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, engagement_id, skip_dojo):
     unique_id = uuid.uuid4().hex[:8]
     unique_file = os.path.join(RESULT_DIR, f"{unique_id}.json")
     success, file_path = scan_repo(repo_url, branch, repo_name, unique_file)
     if success:
-        uploaded = scanner_module.upload_to_defectdojo(dojo_token, dojo_url, engagement_id, file_path, tags=[branch, "trufflehog"], scan_type="Trufflehog Scan")
+        if not skip_dojo:
+            uploaded = scanner_module.upload_to_defectdojo(dojo_token, dojo_url, engagement_id, file_path, tags=[branch, "trufflehog"], scan_type="Trufflehog Scan")
+        else:
+            logger.info(f"Skipping upload to DefectDojo as skip_dojo is set to True.")
+            uploaded = True
         if uploaded:
             logger.info(f"✅ Uploaded findings for branch {branch}.")
             scanner_module.upload_to_flask_app(file_path,unique_id,"trufflehog",repo_name,API_BASE)
@@ -70,6 +74,8 @@ def main(data):
     token = git_source["token"]
     dojo_token = dojo["token"]
     dojo_url = dojo["url"]
+    skip_dojo = False
+    if dojo_url == "": skip_dojo = True
 
     full_url = repo_url.replace("https://", f"https://{username}:{token}@")
     branches = scanner_module.get_branches(full_url)
@@ -78,12 +84,15 @@ def main(data):
         logger.info(f"No branches found for {repo_url}. Skipping...")
         return
 
-    product_id = scanner_module.get_or_create_product(dojo_token, dojo_url, label_name)
-    engagement_id = scanner_module.get_or_create_engagement(dojo_token, dojo_url, product_id, repo_name)
-
+    if not skip_dojo:
+        engagement_id = scanner_module.defect_dojo_prep(dojo_token, dojo_url, label_name, repo_name)
+    else: 
+        engagement_id = None
+        logger.info(f"Skipping DefectDojo preparation as skip_dojo is set to True.")
+    
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         futures = [executor.submit(
-            scan_and_upload_branch, full_url, branch, repo_name, dojo_token, dojo_url, engagement_id
+            scan_and_upload_branch, full_url, branch, repo_name, dojo_token, dojo_url, engagement_id, skip_dojo
         ) for branch in branches]
 
         concurrent.futures.wait(futures)

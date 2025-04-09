@@ -30,6 +30,15 @@ def get_branches(repo_url):
     branches = [line.split("\t")[1].replace("refs/heads/", "") for line in result.stdout.splitlines()]
     return branches
 
+def defect_dojo_prep(dojo_token, dojo_url, label_name, repo_name):
+    try:
+        product_id = get_or_create_product(dojo_token, dojo_url, label_name)
+        engagement_id = get_or_create_engagement(dojo_token, dojo_url, product_id, repo_name)
+    except Exception as e:
+        logger.error(f"Error preparing DefectDojo: {str(e)}")
+        return None
+    return engagement_id
+
 def get_or_create_product(token, dojo_url, product_name):
     headers = {"Authorization": f"Token {token}"}
     res = requests.get(f"{dojo_url}/api/v2/products/?name={product_name}", headers=headers)
