@@ -244,7 +244,7 @@
         <td>${s.source_label}</td>
         <td>${s.repo_name}</td>
         <td>${s.scanner_name}</td>
-        <td>${s.frequency}</td>
+        <td>${s.cron_minute} ${s.cron_hour} * * ${s.cron_day}</td>
         <td>${s.last_run || "-"}</td>
         <td><button class="btn btn-sm btn-danger" onclick="deleteSchedule(${s.id})">Delete</button></td>
       `;
