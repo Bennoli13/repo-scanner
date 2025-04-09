@@ -389,7 +389,7 @@ def create_schedule():
     cron_hour = data.get("cron_hour")
     cron_minute = data.get("cron_minute")
 
-    if not all([source_id, scanner_name, cron_day, cron_hour, cron_minute]):
+    if source_id is None or scanner_name is None or cron_day is None or cron_hour is None or cron_minute is None:
         return jsonify({"error": "Missing required fields"}), 400
 
     new_schedule = ScheduledScan(
