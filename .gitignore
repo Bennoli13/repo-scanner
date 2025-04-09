@@ -26,8 +26,11 @@ scanner.db
 *.swp
 *.swo
 
-# Logs
+# Logs and result
 *.log
+*.json
+results/
+files/
 
 # OS files
 .DS_Store

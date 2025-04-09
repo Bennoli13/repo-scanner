@@ -44,3 +44,14 @@ services:
       - web
       - rabbitmq
     restart: always
+  
+  scheduler:
+    build: .
+    environment:
+      - FERNET_KEY=${FERNET_KEY}
+      - API_BASE=http://web:5000
+      - DATABASE_URI=${DATABASE_URI}
+    depends_on:
+      - web
+    command: ["python", "run_scheduler.py"]
+    restart: always
