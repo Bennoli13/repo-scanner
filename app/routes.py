@@ -431,3 +431,11 @@ def delete_schedule(schedule_id):
     db.session.delete(s)
     db.session.commit()
     return jsonify({"message": "Scheduled scan deleted"})
+
+@main.route("/api/schedule/<int:schedule_id>/mark-run", methods=["PATCH"])
+def update_schedule_last_run(schedule_id):
+    scan = ScheduledScan.query.get_or_404(schedule_id)
+    scan.last_run = datetime.utcnow()
+    db.session.commit()
+    return jsonify({"message": "last_run updated"}), 200
+
