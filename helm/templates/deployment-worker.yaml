@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: repo-scanner-worker
+spec:
+  replicas: {{ .Values.replicaCount.worker }}
+  selector:
+    matchLabels:
+      app: repo-scanner
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: repo-scanner
+        component: worker
+    spec:
+      containers:
+        - name: worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "init_worker.py"]
+          envFrom:
+            - configMapRef:
+                name: repo-scanner-env
+            - secretRef:
+                name: repo-scanner-secret

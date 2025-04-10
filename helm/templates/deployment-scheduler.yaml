@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: repo-scanner-scheduler
+spec:
+  replicas: {{ .Values.replicaCount.scheduler }}
+  selector:
+    matchLabels:
+      app: repo-scanner
+      component: scheduler
+  template:
+    metadata:
+      labels:
+        app: repo-scanner
+        component: scheduler
+    spec:
+      containers:
+        - name: scheduler
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "run_scheduler.py"]
+          envFrom:
+            - configMapRef:
+                name: repo-scanner-env
+            - secretRef:
+                name: repo-scanner-secret

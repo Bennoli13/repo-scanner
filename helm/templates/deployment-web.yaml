@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: repo-scanner-web
+spec:
+  replicas: {{ .Values.replicaCount.web }}
+  selector:
+    matchLabels:
+      app: repo-scanner
+      component: web
+  template:
+    metadata:
+      labels:
+        app: repo-scanner
+        component: web
+    spec:
+      containers:
+        - name: web
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["flask", "run", "--host=0.0.0.0"]
+          ports:
+            - containerPort: 5000
+          env:
+            - name: FLASK_ENV
+              value: {{ .Values.env.FLASK_ENV | quote }}
+            - name: API_BASE
+              value: {{ .Values.env.API_BASE | quote }}
+            - name: DATABASE_URI
+              value: {{ .Values.env.DATABASE_URI | quote }}
+            - name: FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: repo-scanner-secret
+                  key: FERNET_KEY
+            - name: RABBITMQ_HOST
+              value: {{ .Values.env.RABBITMQ_HOST | quote }}
+            - name: RABBITMQ_USER
+              value: {{ .Values.env.RABBITMQ_USER | quote }}
+            - name: RABBITMQ_PASS
+              value: {{ .Values.env.RABBITMQ_PASS | quote }}
+          volumeMounts:
+            - name: data-volume
+                mountPath: /app/instance
+            - name: data-volume
+                mountPath: /app/files
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: repo-scanner-data
+
