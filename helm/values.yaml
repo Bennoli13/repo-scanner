@@ -1,0 +1,31 @@
+image:
+  repository: repo-scanner
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount:
+  web: 1
+  worker: 2
+  scheduler: 1
+
+env:
+  FLASK_ENV: production
+  API_BASE: http://web:5000
+
+service:
+  type: ClusterIP
+  port: 5000
+
+ingress:
+  enabled: false
+  host: repo-scanner.local
+  annotations: {}
+
+rabbitmq:
+  enabled: true
+  image: rabbitmq:3-management
+
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: standard

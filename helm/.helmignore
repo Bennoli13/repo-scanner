@@ -1,0 +1,7 @@
+*.tgz
+*.log
+.DS_Store
+.git/
+__pycache__/
+.env
+.env.*

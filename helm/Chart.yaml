@@ -1,0 +1,31 @@
+apiVersion: v2
+name: repo-scanner
+version: 0.1.0
+appVersion: "1.0.0"
+description: A Helm chart for deploying the Repo Scanner Flask app, worker, and scheduler
+home: https://github.com/Bennoli13/repo-scanner.git
+maintainers:
+  - name: Ben Abbas
+    email: adhyatma.abbas@gmail.com
+keywords:
+  - security
+  - scanner
+  - defectdojo
+  - trufflehog
+  - trivy
+
+# Chart structure:
+# helm/
+# ├── Chart.yaml
+# ├── values.yaml
+# ├── values-secret.yaml
+# ├── .helmignore
+# └── templates/
+#     ├── deployment-web.yaml
+#     ├── deployment-worker.yaml
+#     ├── deployment-scheduler.yaml
+#     ├── service-web.yaml
+#     ├── ingress-web.yaml
+#     ├── configmap-env.yaml
+#     └── secret-env.yaml
+#     └── pvc-data.yaml
