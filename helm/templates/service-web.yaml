@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: repo-scanner-web
+  labels:
+    app: repo-scanner
+    component: web
+    release: {{ .Release.Name }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: repo-scanner
+    component: web
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.port }}

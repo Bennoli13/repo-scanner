@@ -4,4 +4,5 @@ metadata:
   name: repo-scanner-env
 data:
   FLASK_ENV: {{ .Values.env.FLASK_ENV | quote }}
+  RABBITMQ_HOST: {{ .Values.env.RABBITMQ_HOST | quote }}
   API_BASE: {{ .Values.env.API_BASE | quote }}

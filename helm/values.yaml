@@ -1,3 +1,5 @@
+db_init: true
+
 image:
   repository: bennoli13/repo-scanner
   tag: v1.0.0
@@ -10,22 +12,23 @@ replicaCount:
 
 env:
   FLASK_ENV: production
-  API_BASE: http://web:5000
+  RABBITMQ_HOST: repo-scanner-rabbitmq.{Namespace}.svc.cluster.local
+  API_BASE: http://repo-scanner-web.{Namespace}.svc.cluster.local:5000
 
 service:
   type: ClusterIP
   port: 5000
 
 ingress:
-  enabled: false
-  host: repo-scanner.local
+  enabled: true
+  host: {your-hostname-here}
   annotations: {}
-
+    
 rabbitmq:
   enabled: true
   image: rabbitmq:3-management
 
 persistence:
   enabled: true
-  size: 1Gi
-  storageClass: standard
+  size: 5Gi
+  storageClass: gp3-retain
