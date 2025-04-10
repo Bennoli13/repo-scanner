@@ -1,6 +1,6 @@
 image:
-  repository: repo-scanner
-  tag: latest
+  repository: bennoli13/repo-scanner
+  tag: v1.0.0
   pullPolicy: IfNotPresent
 
 replicaCount:
