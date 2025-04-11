@@ -414,6 +414,8 @@ def list_schedules():
         result.append({
             "id": s.id,
             "source_label": s.source.label_name,
+            "source_id": s.source.id,
+            "repo_id": s.repo.id if s.repo else None,
             "repo_name": s.repo.name if s.repo else "All Repos",
             "scanner_name": s.scanner_name,
             "cron_day": s.cron_day,
