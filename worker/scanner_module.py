@@ -45,8 +45,23 @@ def get_or_create_product(token, dojo_url, product_name):
     data = res.json()
     if data["count"] > 0:
         return data["results"][0]["id"]
+    
+    # Get first ProductType (or create one if needed)
+    ptype_res = requests.get(f"{dojo_url}/api/v2/product_types/", headers=headers)
+    ptype_data = ptype_res.json()
+    if ptype_data["count"] == 0:
+        raise Exception("No product types found. Please create one in DefectDojo first.")
+    prod_type_id = ptype_data["results"][0]["id"]
+    
+    payload = {
+        "name": product_name,
+        "description": f"Product auto-created for {product_name}",
+        "prod_type": prod_type_id,
+        "sla_configuration": None  # Optional: set an SLA ID if available
+    }
 
-    res = requests.post(f"{dojo_url}/api/v2/products/", json={"name": product_name}, headers=headers)
+    res = requests.post(f"{dojo_url}/api/v2/products/", json=payload, headers=headers)
+    logger.info(f"Product creation response: {res.json()}")
     return res.json()["id"]
 
 def get_or_create_engagement(token, dojo_url, product_id, repo_name):
