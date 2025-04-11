@@ -1,5 +1,7 @@
 import os
 import subprocess
+import shutil
+import tempfile
 import json
 import logging
 import uuid
@@ -18,20 +20,38 @@ RESULT_DIR = "./results"
 os.makedirs(RESULT_DIR, exist_ok=True)
 
 def scan_repo(repo_url, branch, repo_name, output_file):
-    logger.info(f"Scanning {repo_name} on branch {branch}...")
+    logger.info(f"📦 Cloning {repo_name} (branch: {branch}) for Trivy scan...")
 
-    result = subprocess.run(
-        ["trivy", "repo", "--format", "json", "--output", output_file, repo_url],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
-    )
+    # 1. Create temp directory for cloning
+    temp_dir = tempfile.mkdtemp()
+    repo_path = os.path.join(temp_dir, repo_name)
+
+    # 2. Clone the repo (URL includes credentials)
+    clone_cmd = ["git", "clone", "--branch", branch, "--depth", "1", repo_url, repo_path]
+    result = subprocess.run(clone_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
-        repo_url_without_cred = repo_url.split("@")[1]
-        logger.info(f"❌  [Trivy] Error scanning {repo_url_without_cred} ({branch}): {result.stderr}")
+        safe_url = repo_url.split("@")[-1]
+        logger.error(f"❌ Failed to clone {safe_url}: {result.stderr}")
+        shutil.rmtree(temp_dir)
         return False, output_file
 
-    logger.info(f"Scan complete: {output_file}")
+    # 3. Run Trivy scan in fs mode
+    logger.info(f"🔍 Running Trivy scan on {repo_name} (branch: {branch})...")
+    scan_cmd = [
+        "trivy", "fs", "--format", "json", "--output", output_file,
+        "--scanners", "vuln,misconfig,license",
+        repo_path
+    ]
+    scan_result = subprocess.run(scan_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    # 4. Clean up
+    shutil.rmtree(temp_dir)
+
+    if scan_result.returncode != 0:
+        logger.error(f"❌ Trivy scan failed for {repo_name}: {scan_result.stderr}")
+        return False, output_file
+
+    logger.info(f"✅ Trivy scan complete: {output_file}")
     return True, output_file
 
 def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, engagement_id, skip_dojo):
