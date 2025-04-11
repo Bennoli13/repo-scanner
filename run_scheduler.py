@@ -5,6 +5,7 @@ import logging
 from datetime import datetime
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
+from functools import partial
 
 # Setup logging
 logging.basicConfig(
@@ -60,7 +61,7 @@ def register_all_scheduled_jobs():
             minute = scan.get("cron_minute", 0)
 
             scheduler.add_job(
-                func=lambda s=scan: scheduled_scan_runner(s),
+                func=partial(scheduled_scan_runner, scan),
                 trigger='cron',
                 day_of_week=day,
                 hour=hour,
