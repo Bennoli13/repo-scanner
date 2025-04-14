@@ -42,3 +42,15 @@ class ScheduledScan(db.Model):
 
     source = db.relationship("GitSourceConfig", backref=db.backref("scheduled_scans", cascade="all, delete"))
     repo = db.relationship("Repository", backref=db.backref("scheduled_scans", cascade="all, delete"))
+
+class ScanHashRecord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    scanner = db.Column(db.String(50), nullable=False)
+    repo_name = db.Column(db.String(255), nullable=False)  # ADD THIS
+    branch = db.Column(db.String(255), nullable=False)
+    result_hash = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(db.DateTime, default=db.func.now())
+
+    __table_args__ = (
+        db.UniqueConstraint("scanner", "repo_name", "branch", name="unique_scanner_repo_branch"),
+    )
