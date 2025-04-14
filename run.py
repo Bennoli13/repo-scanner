@@ -1,15 +1,11 @@
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
+from app import create_app, db
+from app.models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan, ScanHashRecord
 
-db = SQLAlchemy()
+app = create_app()
 
-def create_app():
-    app = Flask(__name__)
-    app.config.from_object("config.Config")
+with app.app_context():
+    # Create the database and tables if they don't exist
+    db.create_all()
 
-    db.init_app(app)
-
-    from .routes import main
-    app.register_blueprint(main)
-
-    return app
+if __name__ == "__main__":
+    app.run(host="0.0.0.0")

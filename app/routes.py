@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, Flask, send_file, send_from_directory
 from . import db
-from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan
+from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan, ScanHashRecord
 from .utils import encrypt_token, decrypt_token, push_scan_job_to_queue
 
 from sqlalchemy import and_
@@ -441,3 +441,57 @@ def update_schedule_last_run(schedule_id):
     db.session.commit()
     return jsonify({"message": "last_run updated"}), 200
 
+
+# ------------------------------
+# API: Scan Hash
+# ------------------------------
+@main.route("/api/hash/check", methods=["GET"])
+def check_hash():
+    scanner = request.args.get("scanner")
+    repo_name = request.args.get("repo_name")
+    branch = request.args.get("branch")
+    hash_value = request.args.get("hash")
+
+    if not all([scanner, repo_name, branch, hash_value]):
+        return jsonify({"error": "Missing parameters"}), 400
+
+    exists = ScanHashRecord.query.filter_by(
+        scanner=scanner,
+        repo_name=repo_name,
+        branch=branch,
+        result_hash=hash_value
+    ).first() is not None
+
+    return jsonify({"exists": exists})
+
+@main.route("/api/hash/add", methods=["POST"])
+def add_hash():
+    data = request.get_json()
+    scanner = data.get("scanner")
+    repo_name = data.get("repo_name")
+    branch = data.get("branch")
+    hash_value = data.get("hash")
+
+    if not all([scanner, repo_name, branch, hash_value]):
+        return jsonify({"error": "Missing parameters"}), 400
+
+    existing = ScanHashRecord.query.filter_by(
+        scanner=scanner,
+        repo_name=repo_name,
+        branch=branch
+    ).first()
+
+    if existing:
+        existing.result_hash = hash_value
+        db.session.commit()
+        return jsonify({"message": "Hash updated"}), 200
+
+    new_hash = ScanHashRecord(
+        scanner=scanner,
+        repo_name=repo_name,
+        branch=branch,
+        result_hash=hash_value
+    )
+    db.session.add(new_hash)
+    db.session.commit()
+    return jsonify({"message": "Hash recorded"}), 201
