@@ -5,6 +5,7 @@ import logging
 import uuid
 import concurrent.futures
 from . import scanner_module
+from .hash_manager import HashManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -13,6 +14,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 API_BASE = os.environ.get("API_BASE")
+hash_mgr = HashManager(api_base=API_BASE)
+
 RESULT_DIR = "./results"
 os.makedirs(RESULT_DIR, exist_ok=True)
 
@@ -45,20 +48,31 @@ def scan_repo(repo_url, branch, repo_name, output_file):
 def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, engagement_id, skip_dojo):
     unique_id = uuid.uuid4().hex[:8]
     unique_file = os.path.join(RESULT_DIR, f"{unique_id}.json")
+
     success, file_path = scan_repo(repo_url, branch, repo_name, unique_file)
+
     if success:
-        if not skip_dojo:
-            uploaded = scanner_module.upload_to_defectdojo(dojo_token, dojo_url, engagement_id, file_path, tags=[branch, "trufflehog"], scan_type="Trufflehog Scan")
+        already_uploaded = hash_mgr.check_exists("trufflehog", repo_name, branch, file_path)
+
+        if not skip_dojo and not already_uploaded:
+            uploaded = scanner_module.upload_to_defectdojo(
+                dojo_token, dojo_url, engagement_id, file_path,
+                tags=[branch, "trufflehog"],
+                scan_type="Trufflehog Scan"
+            )
         else:
-            logger.info(f"Skipping upload to DefectDojo as skip_dojo is set to True.")
-            uploaded = True
+            logger.info("Skipping upload to DefectDojo (either skipped or already uploaded).")
+            uploaded = False
+
         if uploaded:
             logger.info(f"✅ Uploaded findings for branch {branch}.")
-            scanner_module.upload_to_flask_app(file_path,unique_id,"trufflehog",repo_name,API_BASE)
+            hash_mgr.record("trufflehog", repo_name, branch, file_path)
+            scanner_module.upload_to_flask_app(file_path, unique_id, "trufflehog", repo_name, API_BASE)
         else:
             logger.info(f"❌ Failed to upload findings for branch {branch}.")
     else:
         logger.info(f"==== No findings to upload for branch {branch} ===")
+
 
 def main(data):
     logger.info(f"🚀 Running TruffleHog scanner for job_id={data['job_id']}")

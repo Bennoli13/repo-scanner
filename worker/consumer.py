@@ -91,22 +91,31 @@ def connect_with_retry(params, retries=10, delay=3):
             time.sleep(delay)
     raise Exception("❌ Failed to connect to RabbitMQ after multiple attempts")
 
+def run_consumer():
+    while True:
+        try:
+            credentials = pika.PlainCredentials(rabbitmq_user, rabbitmq_pass)
+            params = pika.ConnectionParameters(
+                host=rabbitmq_host,
+                credentials=credentials,
+                heartbeat=600,
+                blocked_connection_timeout=300
+            )
+            connection = connect_with_retry(params)
+            channel = connection.channel()
+            channel.queue_declare(queue="scanner_jobs", durable=True)
+            channel.basic_qos(prefetch_count=1)
+            channel.basic_consume(queue="scanner_jobs", on_message_callback=process_job)
+
+            logger.info("🎧 Worker connected. Waiting for jobs...")
+            channel.start_consuming()
+
+        except pika.exceptions.AMQPConnectionError as e:
+            logger.warning("💥 Lost connection to RabbitMQ. Retrying in 5 seconds...")
+            time.sleep(5)
+        except Exception as e:
+            logger.exception("🔥 Unexpected error in consumer loop. Restarting in 5 seconds...")
+            time.sleep(5)
+            
 def main():
-    credentials = pika.PlainCredentials(rabbitmq_user, rabbitmq_pass)
-    params = pika.ConnectionParameters(
-        host=rabbitmq_host,
-        credentials=credentials,
-        heartbeat=600,  # 🛡️ Increase heartbeat to prevent timeout on long jobs
-        blocked_connection_timeout=300  # optional: also avoid hanging if RabbitMQ is slow
-    )
-
-    connection = connect_with_retry(params)
-
-    channel = connection.channel()
-    channel.queue_declare(queue="scanner_jobs", durable=True)
-
-    channel.basic_qos(prefetch_count=1)
-    channel.basic_consume(queue="scanner_jobs", on_message_callback=process_job)
-
-    logger.info("🎧 Worker listening on RabbitMQ queue: scanner_jobs")
-    channel.start_consuming()
+    run_consumer()
