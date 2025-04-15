@@ -17,11 +17,17 @@ class HashManager:
                 with open(file_path, "r", encoding="utf-8") as f:
                     for line in f:
                         item = json.loads(line.strip())
-                        git_data = item.get("SourceMetadata", {}).get("Data", {}).get("Git", {})
-                        if "timestamp" in git_data:
-                            del git_data["timestamp"]
-                        lines.append(json.dumps(item, sort_keys=True))
-                joined = "\n".join(lines)
+                        git = item.get("SourceMetadata", {}).get("Data", {}).get("Git", {})
+                        raw = item.get("Raw", "")
+
+                        commit = git.get("commit", "")
+                        file_path_ = git.get("file", "")
+
+                        combined = f"{commit}|{file_path_}|{raw}"
+                        lines.append(combined)
+
+                # Join and hash
+                joined = "\n".join(sorted(lines))  # sort for deterministic hash
                 return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
             elif scanner == "trivy":
@@ -37,6 +43,7 @@ class HashManager:
         except Exception as e:
             logger.error(f"⚠️ Failed to compute hash for {scanner} on {file_path}: {e}")
             return None
+
 
     def check_exists(self, scanner, repo_name, branch, file_path):
         result_hash = self.compute_file_hash(scanner, file_path)
