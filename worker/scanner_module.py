@@ -97,6 +97,9 @@ def upload_to_defectdojo(token, dojo_url, engagement_id, file_path, tags, scan_t
     }
     res = requests.post(f"{dojo_url}/api/v2/import-scan/", headers=headers, files=files, data=data)
     logger.info(f"Upload response: {res.status_code}")
+    # print log message if fail
+    if res.status_code != 201:
+        logger.error(f"Failed to upload scan file: {res.text}")
     files["file"].close()
     return res.ok
 
