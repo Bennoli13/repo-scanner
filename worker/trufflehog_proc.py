@@ -61,6 +61,7 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
                 tags=[branch, "trufflehog"],
                 scan_type="Trufflehog Scan"
             )
+            logger.info(f"Upload status: {uploaded}")
         else:
             logger.info("Skipping upload to DefectDojo (either skipped or already uploaded).")
             uploaded = False
