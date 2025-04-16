@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: repo-scanner-worker
 spec:
-  replicas: {{ .Values.replicaCount.worker.child }}
+  replicas: {{ .Values.replicaCount.worker.master }}
   selector:
     matchLabels:
       app: repo-scanner
@@ -21,7 +21,7 @@ spec:
           command: ["python", "init_worker.py"]
           env:
             - name: WORKER_TYPE
-              value: "worker"
+              value: "master"
           envFrom:
             - configMapRef:
                 name: repo-scanner-env

@@ -30,6 +30,23 @@ services:
     environment:
       - RABBITMQ_DEFAULT_USER=admin
       - RABBITMQ_DEFAULT_PASS=admin
+  master-worker:
+    build: .
+    container_name: scanner-master-worker
+    environment:
+      - FERNET_KEY=${FERNET_KEY}
+      - API_BASE=http://web:5000
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASS=${RABBITMQ_PASS}
+      - TRUFFLEHOG_NO_UPDATE=true
+      - WORKER_TYPE=master
+    command: ["python", "init_worker.py"]
+    depends_on:
+      - web
+      - rabbitmq
+    restart: always
+    volumes: []  # ⛔️ prevent source code override
 
   worker:
     build: .
@@ -41,6 +58,7 @@ services:
       - RABBITMQ_USER=${RABBITMQ_USER}
       - RABBITMQ_PASS=${RABBITMQ_PASS}
       - TRUFFLEHOG_NO_UPDATE=true
+      - WORKER_TYPE=worker
     command: ["python", "init_worker.py"]
     depends_on:
       - web
