@@ -8,6 +8,7 @@ image:
 replicaCount:
   web: 1
   worker: 2
+  webhookWorker: 2
   scheduler: 1
 
 env:
@@ -32,3 +33,12 @@ persistence:
   enabled: true
   size: 5Gi
   storageClass: gp3-retain
+
+worker:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

@@ -114,3 +114,31 @@ def main(data):
         concurrent.futures.wait(futures)
 
     logger.info("🏁 [Trufflehog] All branches processed.")
+
+
+def main_webhook(data):
+    logger.info(f"🚀 Running TruffleHog scanner from Webhook")
+
+    repo_name = data["repo_name"]
+    branch = data["branch"]
+    commit = data.get("commit")  # optional
+    repo_url = f"{data['git_source']['base_url'].rstrip('/')}/{repo_name}.git"
+    label_name = data["git_source"]["label_name"]
+    dojo_token = data["defectdojo"]["token"]
+    dojo_url = data["defectdojo"]["url"]
+    skip_dojo = dojo_url == ""
+    full_url = repo_url  # already contains username:token in webhook
+
+    if not skip_dojo:
+        engagement_id = scanner_module.defect_dojo_prep(dojo_token, dojo_url, label_name, repo_name)
+    else:
+        engagement_id = None
+        logger.info("Skipping DefectDojo setup (no token/url).")
+
+    # Scan and upload the specific branch only
+    scan_and_upload_branch(
+        full_url, branch, repo_name, dojo_token, dojo_url, engagement_id, skip_dojo
+    )
+
+    logger.info("🏁 [Trufflehog] Webhook-triggered scan finished.")
+

@@ -51,6 +51,14 @@
 
 <hr>
 
+<!-- Git Webhook Secrets List -->
+<h5 class="mt-4">Webhook Secrets</h5>
+<ul class="list-group" id="webhookSecretList">
+  <!-- JS will populate this -->
+</ul>
+
+<hr>
+
 <!-- DefectDojo Config -->
 <h4 class="mt-5">DefectDojo Config</h4>
 <form id="defectdojoForm">
@@ -288,5 +296,65 @@
   // Load sources and existing schedules
   loadGitSources();
   loadSchedules();
+</script>
+
+<!-- JS for Webhook Secret -->
+<script>
+  async function loadWebhookSecrets() {
+    const res = await fetch("/api/webhook-secret");
+    const secrets = await res.json();
+    const list = document.getElementById("webhookSecretList");
+    list.innerHTML = "";
+  
+    const platforms = ["github", "gitlab"];
+    platforms.forEach(pf => {
+      const li = document.createElement("li");
+      li.className = "list-group-item d-flex justify-content-between align-items-center";
+  
+      const current = secrets.find(s => s.platform === pf);
+      if (current) {
+        li.innerHTML = `
+          <strong>${pf.toUpperCase()}</strong>: ****** 
+          <button class="btn btn-sm btn-danger" onclick="resetSecret('${pf}')">Reset</button>
+        `;
+      } else {
+        li.innerHTML = `
+          <strong>${pf.toUpperCase()}</strong>: 
+          <div class="input-group w-50">
+            <input type="password" class="form-control" id="secret_${pf}" placeholder="Enter secret">
+            <button class="btn btn-outline-secondary" type="button" onclick="toggleSecret('${pf}')">👁️</button>
+          </div>
+          <button class="btn btn-sm btn-primary ms-2" onclick="saveSecret('${pf}')">Save</button>
+        `;
+      }
+  
+      list.appendChild(li);
+    });
+  }
+  
+  async function saveSecret(platform) {
+    const value = document.getElementById("secret_" + platform).value;
+    if (!value) return alert("Please enter a secret.");
+    const res = await fetch("/api/webhook-secret", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ platform, secret: value })
+    });
+    if (res.ok) loadWebhookSecrets();
+    else alert("Failed to save secret.");
+  }
+  
+  async function resetSecret(platform) {
+    if (!confirm(`Are you sure you want to remove the secret for ${platform}?`)) return;
+    const res = await fetch("/api/webhook-secret?platform=" + platform, { method: "DELETE" });
+    if (res.ok) loadWebhookSecrets();
+    else alert("Failed to reset secret.");
+  }
+  function toggleSecret(platform) {
+    const input = document.getElementById("secret_" + platform);
+    input.type = input.type === "password" ? "text" : "password";
+  }
+  document.addEventListener("DOMContentLoaded", loadWebhookSecrets);
+  
 </script>
 {% endblock %}
