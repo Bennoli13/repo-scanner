@@ -1,4 +1,6 @@
 from . import db
+from sqlalchemy.ext.mutable import MutableList
+
 
 class DefectDojoConfig(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -26,9 +28,29 @@ class ScannerJob(db.Model):
     scanner_name = db.Column(db.String(50))
     repo_id = db.Column(db.Integer, db.ForeignKey("repository.id"))
     git_source_id = db.Column(db.Integer, db.ForeignKey("git_source_config.id"))
-    status = db.Column(db.String(50), default="pending")
+    total_branch = db.Column(db.Integer, default=0)
+    scanned_branch = db.Column(MutableList.as_mutable(db.JSON), default=list)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now())
+
+    @property
+    def progress(self):
+        scanned_count = len(self.scanned_branch or [])
+        if self.total_branch == 0:
+            return "pending"
+        progress_ratio = scanned_count / self.total_branch
+        if progress_ratio >= 0.8:
+            return "completed"
+        elif scanned_count > 0:
+            return "in_progress"
+        else:
+            return "pending"
+    @property
+    def progress_ratio(self):
+        scanned_count = len(self.scanned_branch or [])
+        if self.total_branch == 0:
+            return 0.0
+        return round(scanned_count / self.total_branch, 2)
 
 class ScheduledScan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
