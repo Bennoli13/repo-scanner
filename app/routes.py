@@ -563,15 +563,6 @@ def verify_github_signature(secret, payload, signature_header):
 @main.route("/webhook/<platform>", methods=["POST"])
 def handle_webhook(platform):
     raw_body = request.data
-    
-    #Temporary for Debugging
-    import logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s"
-    )
-    logger = logging.getLogger(__name__)
-    logger.info(f"Received webhook for {platform}: {raw_body}")    
 
     secret_entry = WebhookSecret.query.filter_by(platform=platform).first()
     if not secret_entry:
