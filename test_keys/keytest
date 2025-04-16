@@ -1,0 +1,1 @@
+test_jdbc=jdbc:mysql://invalid.cluster-ro-cvdgobmslfew.eu-central-1.rds.amazonaws.com:3306/thisistest?allowMultiQueries=true&useSSL=false
