@@ -53,9 +53,15 @@ def process_job(ch, method, properties, body):
 
         # 3. Scanning
         if data["scanner_name"] == "trufflehog":
-            trufflehog_proc.main(data)
+            if data.get("webhook"):
+                trufflehog_proc.main_webhook(data)
+            else:
+                trufflehog_proc.main(data)
         elif data["scanner_name"] == "trivy":
-            trivy_proc.main(data)
+            if data.get("webhook"):
+                trivy_proc.main_webhook(data)
+            else:
+                trivy_proc.main(data)
         else: 
             raise Exception(f"Unknown scanner: {data['scanner_name']}")
 
@@ -78,6 +84,32 @@ def process_job(ch, method, properties, body):
             f"{API_BASE}/api/scan/{job_id}",
             json={"status": f"failed: {str(e)}"}
         )
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+
+def process_webhook_job(ch, method, properties, body):
+    try:
+        job = json.loads(body)
+        logger.info(f"\n🚀 [Webhook] New job received for {job.get('repo', {}).get('name')}")
+
+        # Decrypt tokens
+        git_token = decrypt_token(job["git_source"]["token"])
+        dojo_token = decrypt_token(job["defectdojo"]["token"])
+        job["git_source"]["token"] = git_token
+        job["defectdojo"]["token"] = dojo_token
+
+        scanner = job["scanner_name"]
+        if scanner == "trufflehog":
+            trufflehog_proc.main_webhook(job)
+        elif scanner == "trivy":
+            trivy_proc.main_webhook(job)
+        else:
+            raise Exception(f"Unknown scanner: {scanner}")
+
+        logger.info("✅ Webhook scan completed successfully.")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+
+    except Exception as e:
+        logger.error(f"❌ [Webhook Job Failed] {e}")
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
 def connect_with_retry(params, retries=10, delay=3):
@@ -116,6 +148,36 @@ def run_consumer():
         except Exception as e:
             logger.exception("🔥 Unexpected error in consumer loop. Restarting in 5 seconds...")
             time.sleep(5)
+
+def run_webhook_consumer():
+    """Consumer loop for webhook-triggered jobs"""
+    while True:
+        try:
+            credentials = pika.PlainCredentials(rabbitmq_user, rabbitmq_pass)
+            params = pika.ConnectionParameters(
+                host=rabbitmq_host,
+                credentials=credentials,
+                heartbeat=600,
+                blocked_connection_timeout=300
+            )
+            connection = connect_with_retry(params)
+            channel = connection.channel()
+            channel.queue_declare(queue="webhook_jobs", durable=True)
+            channel.basic_qos(prefetch_count=1)
+            channel.basic_consume(queue="webhook_jobs", on_message_callback=process_webhook_job)
+
+            logger.info("🎧 Webhook Worker connected. Waiting for jobs...")
+            channel.start_consuming()
+
+        except pika.exceptions.AMQPConnectionError:
+            logger.warning("💥 Lost RabbitMQ connection. Retrying in 5 seconds...")
+            time.sleep(5)
+        except Exception:
+            logger.exception("🔥 Unexpected error in webhook consumer loop. Restarting in 5 seconds...")
+            time.sleep(5)
             
-def main():
-    run_consumer()
+def main(webhook=False):
+    if webhook:
+        run_webhook_consumer()
+    else:
+        run_consumer()

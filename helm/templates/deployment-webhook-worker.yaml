@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: repo-scanner-worker
+  name: repo-scanner-webhook-worker
 spec:
-  replicas: {{ .Values.replicaCount.worker }}
+  replicas: {{ .Values.replicaCount.webhookWorker }}
   selector:
     matchLabels:
       app: repo-scanner
-      component: worker
+      component: webhook-worker
   template:
     metadata:
       labels:
         app: repo-scanner
-        component: worker
+        component: webhook-worker
     spec:
       containers:
-        - name: worker
+        - name: webhook-worker
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["python", "init_worker.py"]
+          command: ["python", "init_webhook_worker.py"]
           envFrom:
             - configMapRef:
                 name: repo-scanner-env
