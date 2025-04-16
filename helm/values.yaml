@@ -7,7 +7,9 @@ image:
 
 replicaCount:
   web: 1
-  worker: 2
+  worker: 
+    master: 1
+    child: 3
   webhookWorker: 2
   scheduler: 1
 
