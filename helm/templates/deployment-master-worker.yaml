@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: repo-scanner-worker
+  name: repo-scanner-master-worker
 spec:
   replicas: {{ .Values.replicaCount.worker.master }}
   selector:
