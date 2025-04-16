@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, Flask, send_file, send_from_directory
 from . import db
-from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan, ScanHashRecord
-from .utils import encrypt_token, decrypt_token, push_scan_job_to_queue
+from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan, ScanHashRecord, WebhookSecret
+from .utils import encrypt_token, decrypt_token, push_scan_job_to_queue, push_webhook_job_to_queue
 
 from sqlalchemy import and_
 from datetime import datetime
@@ -10,8 +10,11 @@ from werkzeug.utils import secure_filename
 import zipfile
 import shutil
 import os
+import hmac
+import hashlib
 
 FILE_UPLOAD_BASE= "/app/files"
+SCANNERS = ["trufflehog", "trivy"]
 main = Blueprint("main", __name__)
 
 # ------------------------------
@@ -495,3 +498,132 @@ def add_hash():
     db.session.add(new_hash)
     db.session.commit()
     return jsonify({"message": "Hash recorded"}), 201
+
+# ------------------------------
+# API: Webhook Handler
+# ------------------------------
+@main.route("/api/webhook-secret", methods=["GET", "POST", "DELETE"])
+def webhook_secret():
+    if request.method == "GET":
+        secrets = WebhookSecret.query.all()
+        return jsonify([{
+            "platform": s.platform,
+            "created_at": s.created_at.isoformat(),
+            "secret": s.secret
+        } for s in secrets])
+
+    elif request.method == "POST":
+        data = request.get_json()
+        platform = data.get("platform")
+        secret = encrypt_token(data.get("secret"))
+        if not platform or not secret:
+            return jsonify({"error": "Missing data"}), 400
+
+        existing = WebhookSecret.query.filter_by(platform=platform).first()
+        if existing:
+            existing.secret = secret
+        else:
+            new_secret = WebhookSecret(platform=platform, secret=secret)
+            db.session.add(new_secret)
+        db.session.commit()
+        return jsonify({"message": "Saved"}), 201
+
+    elif request.method == "DELETE":
+        platform = request.args.get("platform")
+        if not platform:
+            return jsonify({"error": "Platform required"}), 400
+        existing = WebhookSecret.query.filter_by(platform=platform).first()
+        if existing:
+            db.session.delete(existing)
+            db.session.commit()
+        return jsonify({"message": "Deleted"}), 200
+
+def verify_github_signature(secret, payload, signature_header):
+    expected = 'sha256=' + hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature_header or '')
+
+@main.route("/webhook/<platform>", methods=["POST"])
+def handle_webhook(platform):
+    raw_body = request.data
+    
+    #Temporary for Debugging
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s"
+    )
+    logger = logging.getLogger(__name__)
+    logger.info(f"Received webhook for {platform}: {raw_body}")    
+
+    secret_entry = WebhookSecret.query.filter_by(platform=platform).first()
+    if not secret_entry:
+        return jsonify({"error": "No secret configured"}), 403
+
+    secret = decrypt_token(secret_entry.secret)
+
+    # --- GitHub ---
+    if platform == "github":
+        signature = request.headers.get("X-Hub-Signature-256", "")
+        if not verify_github_signature(secret, raw_body, signature):
+            return jsonify({"error": "Invalid signature"}), 403
+
+        payload = request.get_json()
+        repo_url = payload["repository"]["clone_url"]
+        branch = payload["ref"].split("/")[-1]  # refs/heads/main
+        commit_id = payload.get("after")
+
+    # --- GitLab ---
+    elif platform == "gitlab":
+        token = request.headers.get("X-Gitlab-Token", "")
+        if not hmac.compare_digest(token,secret):
+            return jsonify({"error": "Invalid token"}), 403
+
+        payload = request.get_json()
+        repo_url = payload["project"]["http_url"]
+        branch = payload["ref"].split("/")[-1]
+        commit_id = payload.get("after")
+
+    else:
+        return jsonify({"error": "Unsupported platform"}), 400
+
+    # 🔧 You can add logic here to select which scanner(s) to use
+    sources_list = GitSourceConfig.query.all()
+    source = None
+    for sources in sources_list:
+        if repo_url.startswith(sources.base_url):
+            source = sources
+            break
+    
+    if not source:
+        return jsonify({"error": "Git source config not found"}), 404
+    repo_name = repo_url.split("/")[-1].replace(".git", "")
+    repo = Repository.query.filter_by(name=repo_name, source_id=source.id).first()
+    
+    if not repo:
+        return jsonify({"error": "Repository not found in configuration"}), 404
+    
+    dojo = DefectDojoConfig.query.first()
+    
+    # Push job to webhook queue
+    for scanner in SCANNERS:
+        push_webhook_job_to_queue({
+            "git_source": {
+                "id": source.id,
+                "label_name": source.label_name,
+                "platform": source.platform,
+                "base_url": source.base_url,
+                "username": source.username,
+                "token": source.token
+            },
+            "defectdojo": {
+                "url": dojo.url if dojo else "",
+                "token": dojo.token if dojo else ""
+            },
+            "scanner_name": scanner,  # or "trivy", could be platform/config-based too
+            "repo_id": repo.id,
+            "repo_name": repo.name,
+            "branch": branch,
+            "commit_id": commit_id,
+            "is_webhook": True
+        })
+    return jsonify({"message": "Webhook accepted"}), 200

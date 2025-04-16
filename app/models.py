@@ -54,3 +54,11 @@ class ScanHashRecord(db.Model):
     __table_args__ = (
         db.UniqueConstraint("scanner", "repo_name", "branch", name="unique_scanner_repo_branch"),
     )
+
+class WebhookSecret(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    platform = db.Column(db.String(20), nullable=False)  # 'github', 'gitlab'
+    secret = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=db.func.now())
+
+    __table_args__ = (db.UniqueConstraint("platform", name="unique_platform_webhook"),)
