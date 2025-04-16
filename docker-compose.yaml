@@ -48,6 +48,23 @@ services:
     restart: always
     volumes: []  # ⛔️ prevent source code override
 
+  webhook-worker:
+    build: .
+    container_name: scanner-webhook-worker
+    environment:
+      - FERNET_KEY=${FERNET_KEY}
+      - API_BASE=http://web:5000
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASS=${RABBITMQ_PASS}
+      - TRUFFLEHOG_NO_UPDATE=true
+    command: ["python", "init_webhook_worker.py"]
+    depends_on:
+      - web
+      - rabbitmq
+    restart: always
+    volumes: []  # ⛔️ prevent source code override
+
   scheduler:
     build: .
     container_name: scanner-scheduler
