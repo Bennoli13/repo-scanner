@@ -224,13 +224,11 @@ def trigger_scan_jobs():
 
             if job:
                 job.created_at = now
-                job.status = "pending"
             else:
                 job = ScannerJob(
                     scanner_name=scanner_name,
                     repo_id=repo_id,
                     git_source_id=source_id,
-                    status="pending",
                     created_at=now
                 )
             db.session.add(job)
@@ -269,10 +267,11 @@ def scan_status():
         result.append({
             "repo_name": repo_name,
             "scanner_name": job.scanner_name,
-            "status": job.status,
+            "scanned_branch": job.scanned_branch,
+            "status": job.progress,  # use progress instead of status
+            "progress_ratio": job.progress_ratio,
             "updated_at": job.updated_at.strftime("%Y-%m-%d %H:%M:%S")
         })
-
     return jsonify(result)
 
 @main.route("/api/scan/<int:job_id>", methods=["PATCH"])
@@ -280,11 +279,29 @@ def update_scan_status(job_id):
     job = ScannerJob.query.get_or_404(job_id)
     data = request.get_json()
 
-    job.status = data.get("status", job.status)
-    job.updated_at = datetime.utcnow()
+    scanned_branch = job.scanned_branch or []
+    new_branch = data.get("scanned_branch")
+    if new_branch and new_branch not in scanned_branch:
+        scanned_branch.append(new_branch)
+        job.scanned_branch = scanned_branch
+        job.updated_at = datetime.utcnow()
+        db.session.commit()
+    return jsonify({"message": "Branch progress updated"}), 200
 
-    db.session.commit()
-    return jsonify({"message": "Job updated"}), 200
+@main.route("/api/scan/<int:job_id>/set-total-branches", methods=["PATCH"])
+def set_total_branches(job_id):
+    job = ScannerJob.query.get_or_404(job_id)
+    data = request.get_json()
+    total = data.get("total_branch")
+
+    if total is not None and isinstance(total, int) and total >= 0:
+        job.total_branch = total
+        job.updated_at = datetime.utcnow()
+        db.session.commit()
+        return jsonify({"message": "Total branch count updated"}), 200
+
+    return jsonify({"error": "Invalid total_branch value"}), 400
+
 
 @main.route("/api/scan/<int:job_id>/detail", methods=["GET"])
 def scan_job_detail(job_id):
@@ -313,6 +330,7 @@ def scan_job_detail(job_id):
             "token": dojo.token if dojo else ""
         }
     })
+
 # ------------------------------
 # API: File Upload
 # ------------------------------

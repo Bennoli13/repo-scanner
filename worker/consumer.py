@@ -6,6 +6,7 @@ from datetime import datetime
 import os
 from cryptography.fernet import Fernet
 import logging
+from . import scanner_module
 
 #scanner
 from . import trufflehog_proc
@@ -28,62 +29,95 @@ rabbitmq_host = os.getenv("RABBITMQ_HOST", "localhost")
 def decrypt_token(token_encrypted):
     return fernet.decrypt(token_encrypted.encode()).decode()
 
+def update_total_branch(job_id, total):
+    try:
+        res = requests.patch(
+            f"{API_BASE}/api/scan/{job_id}/set-total-branches",
+            json={"total_branch": total}
+        )
+        if res.ok:
+            logging.info(f"✅ Total branch count set to {total} for job_id={job_id}")
+        else:
+            logging.warning(f"⚠️ Failed to set total_branch for job_id={job_id}: {res.text}")
+    except Exception as e:
+        logging.error(f"❌ Error setting total_branch for job_id={job_id}: {e}")
+
+def push_to_branch_queue(branch_data):
+    try:
+        credentials = pika.PlainCredentials(rabbitmq_user, rabbitmq_pass)
+        params = pika.ConnectionParameters(host=rabbitmq_host, credentials=credentials)
+        connection = pika.BlockingConnection(params)
+        channel = connection.channel()
+        channel.queue_declare(queue="scanner_branch_tasks", durable=True)
+        channel.basic_publish(
+            exchange="",
+            routing_key="scanner_branch_tasks",
+            body=json.dumps(branch_data),
+            properties=pika.BasicProperties(delivery_mode=2)  # make message persistent
+        )
+        connection.close()
+        logger.info(f"📤 Branch task queued for {branch_data['repo_name']} ({branch_data['branch']})")
+    except Exception as e:
+        logger.error(f"🔥 Failed to push branch job: {e}")
+
 def process_job(ch, method, properties, body):
     try:
         job = json.loads(body)
         job_id = job["job_id"]
         logger.info(f"\n🚀 [Job {job_id}] Received from queue")
 
-        # 1. Get job details from API
+        # 1. Fetch job details via API
         detail_res = requests.get(f"{API_BASE}/api/scan/{job_id}/detail")
         if not detail_res.ok:
             raise Exception(f"Failed to fetch job detail: {detail_res.text}")
 
         data = detail_res.json()
+        repo = data["repo"]
+        git_source = data["git_source"]
+        dojo = data["defectdojo"]
+        scanner = data["scanner_name"]
 
-        # 2. Decrypt tokens
-        git_token = decrypt_token(data["git_source"]["token"])
-        dojo_token = decrypt_token(data["defectdojo"]["token"])
-        data["git_source"]["token"] = git_token
-        data["defectdojo"]["token"] = dojo_token
+        # 2. Get branches
+        repo_name = repo["name"]
+        base_url = git_source["base_url"]
+        username = git_source["username"]
+        token = decrypt_token(git_source["token"])
 
-        logger.info(f"🧠 [Job {job_id}] Scanner: {data['scanner_name']}")
-        logger.info(f"🔧 [Job {job_id}] Using Git token and Dojo token securely...")
-        logger.info(f"🔄 Starting scan...")
+        full_url = base_url.rstrip("/") + "/" + repo_name + ".git"
+        auth_url = full_url.replace("https://", f"https://{username}:{token}@")
 
-        # 3. Scanning
-        if data["scanner_name"] == "trufflehog":
-            if data.get("webhook"):
-                trufflehog_proc.main_webhook(data)
-            else:
-                trufflehog_proc.main(data)
-        elif data["scanner_name"] == "trivy":
-            if data.get("webhook"):
-                trivy_proc.main_webhook(data)
-            else:
-                trivy_proc.main(data)
-        else: 
-            raise Exception(f"Unknown scanner: {data['scanner_name']}")
+        branches = scanner_module.get_branches(auth_url)
+        if not branches:
+            logger.info(f"No branches found for {repo_name}. Skipping...")
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+            return
 
-        # 4. Report back to API
-        update_res = requests.patch(
-            f"{API_BASE}/api/scan/{job_id}",
-            json={"status": "completed"}
-        )
+        logger.info(f"📚 Found {len(branches)} branches for {repo_name}")
 
-        if update_res.ok:
-            logger.info(f"✅ [Job {job_id}] Scan completed and status updated.")
-        else:
-            raise Exception(f"Failed to update job status: {update_res.text}")
+        # 4. Push each branch as a separate job
+        update_total_branch(job_id, len(branches))
+        for branch in branches:
+            branch_job = {
+                "repo_name": repo_name,
+                "job_id": job_id,
+                "branch": branch,
+                "scanner_name": scanner,
+                "git_source": git_source,
+                "defectdojo": dojo
+            }
+            push_to_branch_queue(branch_job)
 
+        # 5. Acknowledge main job
         ch.basic_ack(delivery_tag=method.delivery_tag)
+        logger.info(f"✅ Fanned out branch jobs for {repo_name}")
 
     except Exception as e:
         logger.error(f"❌ [Job Failed] {e}")
-        update_res = requests.patch(
-            f"{API_BASE}/api/scan/{job_id}",
-            json={"status": f"failed: {str(e)}"}
-        )
+        if "job_id" in locals():
+            requests.patch(
+                f"{API_BASE}/api/scan/{job_id}",
+                json={"status": f"failed: {str(e)}"}
+            )
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
 def process_webhook_job(ch, method, properties, body):
