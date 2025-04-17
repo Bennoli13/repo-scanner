@@ -6,6 +6,7 @@ import uuid
 import concurrent.futures
 from . import scanner_module
 from .hash_manager import HashManager
+import time
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,19 +16,27 @@ logger = logging.getLogger(__name__)
 
 API_BASE = os.environ.get("API_BASE")
 hash_mgr = HashManager(api_base=API_BASE)
+RETRY_COUNT = 3
+DELAY_SECONDS = 5
 
 RESULT_DIR = "./results"
 os.makedirs(RESULT_DIR, exist_ok=True)
 
 def scan_repo(repo_url, branch, repo_name, output_file):
     logger.info(f"Scanning {repo_name} on branch {branch}...")
-
-    result = subprocess.run(
-        ["trufflehog", "git", repo_url, "--branch", branch, "--json"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
-    )
+    for attempt in range(RETRY_COUNT):
+        logger.info(f"Attempt {attempt + 1}/{RETRY_COUNT}...")
+        result = subprocess.run(
+            ["trufflehog", "git", repo_url, "--branch", branch, "--json"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        if result.returncode == 0:
+            break
+        logger.warning(f"⚠️ Attempt {attempt + 1}/{RETRY_COUNT} failed: {result.stderr}")
+        time.sleep(DELAY_SECONDS)
+    
     if result.returncode != 0:
         repo_url_without_cred = repo_url.split("@")[1]
         logger.info(f"❌ [Trufflehog] Error scanning {repo_url_without_cred} ({branch}): {result.stderr}")
