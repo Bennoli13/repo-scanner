@@ -84,7 +84,7 @@ def add_git_config():
         label_name=data.get("label_name"),
         username=data.get("username"),
         platform=data["platform"],
-        base_url=data["base_url"],
+        base_url=data["base_url"].rstrip("/"),
         token=encrypt_token(data["token"])
     )
     db.session.add(config)
@@ -598,19 +598,19 @@ def handle_webhook(platform):
     # 🔧 You can add logic here to select which scanner(s) to use
     sources_list = GitSourceConfig.query.all()
     source = None
-    for sources in sources_list:
-        if repo_url.startswith(sources.base_url):
-            source = sources
+    repo_name = None
+
+    for s in sources_list:
+        prefix = s.base_url.rstrip("/") + "/"
+        if repo_url.startswith(prefix):
+            source = s
+            repo_name = repo_url.replace(prefix, "").replace(".git", "")
             break
-    
-    if not source:
-        return jsonify({"error": "Git source config not found"}), 404
-    repo_name = repo_url.split("/")[-1].replace(".git", "")
+
+    if not source or not repo_name:
+        return jsonify({"error": "Git source config not found or repo name parsing failed"}), 404
+
     repo = Repository.query.filter_by(name=repo_name, source_id=source.id).first()
-    
-    if not repo:
-        return jsonify({"error": "Repository not found in configuration"}), 404
-    
     dojo = DefectDojoConfig.query.first()
     
     # Push job to webhook queue
