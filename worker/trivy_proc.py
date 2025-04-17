@@ -124,7 +124,7 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
     uploaded = False
 
     if not skip_dojo and not already_uploaded:
-        chunks = split_trivy_findings(file_path, max_findings=100)
+        chunks = split_trivy_findings(file_path, max_findings=50)
 
         if not chunks:
             logger.info("🛑 No findings to upload after minimizing.")
