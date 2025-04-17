@@ -127,7 +127,7 @@ def main_webhook(data):
     dojo_token = data["defectdojo"]["token"]
     dojo_url = data["defectdojo"]["url"]
     skip_dojo = dojo_url == ""
-    full_url = repo_url  # already contains username:token in webhook
+    full_url = data.get("auth_url", repo_url)
 
     if not skip_dojo:
         engagement_id = scanner_module.defect_dojo_prep(dojo_token, dojo_url, label_name, repo_name)
