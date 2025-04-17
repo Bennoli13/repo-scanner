@@ -65,35 +65,76 @@ def scan_repo(repo_url, branch, repo_name, output_file):
     logger.info(f"✅ Trivy scan complete: {output_file}")
     return True, output_file
 
+def minimize_and_split_trivy_file(file_path, chunk_size=10):
+    with open(file_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    results = data.get("Results", [])
+
+    # Filter only entries with actual findings
+    results = [r for r in results if r.get("Vulnerabilities")]
+
+    if not results:
+        return []  # Nothing to upload
+
+    # Create a temporary dir to hold chunks
+    temp_dir = tempfile.mkdtemp(prefix="trivy_chunks_")
+    chunk_paths = []
+
+    for i in range(0, len(results), chunk_size):
+        chunk = results[i:i + chunk_size]
+        chunk_data = {**data, "Results": chunk}
+        chunk_path = os.path.join(temp_dir, f"chunk_{i//chunk_size + 1}.json")
+        with open(chunk_path, "w", encoding="utf-8") as cf:
+            json.dump(chunk_data, cf, indent=2)
+        chunk_paths.append(chunk_path)
+
+    return chunk_paths
+
 def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, engagement_id, skip_dojo):
     unique_id = uuid.uuid4().hex[:8]
     unique_file = os.path.join(RESULT_DIR, f"{unique_id}.json")
     success, file_path = scan_repo(repo_url, branch, repo_name, unique_file)
 
-    if success:
-        logger.info(f"Uploading findings file: {file_path}")
-
-        already_uploaded = hash_mgr.check_exists("trivy", repo_name, branch, file_path)
-        logging.info(f"Already uploaded: {already_uploaded}")
-
-        if not skip_dojo and not already_uploaded:
-            uploaded = scanner_module.upload_to_defectdojo(
-                dojo_token, dojo_url, engagement_id, file_path,
-                tags=[branch, "trivy"],
-                scan_type="Trivy Scan"
-            )
-        else:
-            logger.info("Skipping upload to DefectDojo (either skipped or already uploaded).")
-            uploaded = False
-
-        if uploaded:
-            logger.info(f"✅ Uploaded findings for branch {branch}.")
-            hash_mgr.record("trivy", repo_name, branch, file_path)
-            scanner_module.upload_to_flask_app(file_path, unique_id, "trivy", repo_name, API_BASE)
-        else:
-            logger.info(f"❌ Failed to upload findings for branch {branch}.")
-    else:
+    if not success:
         logger.info(f"==== No findings to upload for branch {branch} ===")
+        return
+
+    logger.info(f"Uploading findings file: {file_path}")
+    already_uploaded = hash_mgr.check_exists("trivy", repo_name, branch, file_path)
+    logging.info(f"Already uploaded: {already_uploaded}")
+
+    uploaded = False
+
+    if not skip_dojo and not already_uploaded:
+        chunks = minimize_and_split_trivy_file(file_path, chunk_size=10)
+
+        if not chunks:
+            logger.info("🛑 No findings to upload after minimizing.")
+        else:
+            for i, chunk_path in enumerate(chunks, 1):
+                logger.info(f"🚀 Uploading Trivy chunk {i}/{len(chunks)}...")
+                ok = scanner_module.upload_to_defectdojo(
+                    dojo_token,
+                    dojo_url,
+                    engagement_id,
+                    chunk_path,
+                    tags=[branch, "trivy"],
+                    scan_type="Trivy Scan"
+                )
+                if ok:
+                    uploaded = True  # At least one success
+                else:
+                    logger.warning(f"⚠️ Upload failed for chunk {i}")
+    else:
+        logger.info("Skipping upload to DefectDojo (either skipped or already uploaded).")
+
+    if uploaded:
+        logger.info(f"✅ Uploaded findings for branch {branch}.")
+        hash_mgr.record("trivy", repo_name, branch, file_path)
+        scanner_module.upload_to_flask_app(file_path, unique_id, "trivy", repo_name, API_BASE)
+    else:
+        logger.info(f"❌ Failed to upload findings for branch {branch}.")
 
 def main(data):
     logger.info(f"🚀 Running Trivy scanner for job_id={data['job_id']}")
