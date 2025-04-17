@@ -7,6 +7,7 @@ import os
 from cryptography.fernet import Fernet
 import logging
 from . import scanner_module
+from urllib.parse import urlparse
 
 #scanner
 from . import trufflehog_proc
@@ -130,6 +131,16 @@ def process_webhook_job(ch, method, properties, body):
         dojo_token = decrypt_token(job["defectdojo"]["token"])
         job["git_source"]["token"] = git_token
         job["defectdojo"]["token"] = dojo_token
+        
+        # 👇 Inject username + token into the repo URL
+        repo_name = job["repo_name"]
+        base_url = job["git_source"]["base_url"]
+        username = job["git_source"]["username"]
+        repo_url = f"{base_url.rstrip('/')}/{repo_name}.git"
+        
+        parsed = urlparse(repo_url)
+        auth_url = f"https://{username}:{git_token}@{parsed.netloc}{parsed.path}"
+        job["auth_url"] = auth_url  # pass it to scanner module
 
         scanner = job["scanner_name"]
         if scanner == "trufflehog":
