@@ -10,6 +10,7 @@ from . import scanner_module
 from . import trivy_proc
 from . import trufflehog_proc 
 from . import hash_manager
+from urllib.parse import urlparse
 
 # Logger setup
 logging.basicConfig(
@@ -60,7 +61,8 @@ def scan_job_handler(data):
         dojo_token = decrypt_token(data["defectdojo"]["token"])
         skip_dojo = dojo_url == ""
 
-        auth_url = repo_url.replace("https://", f"https://{username}:{token}@")
+        parsed = urlparse(repo_url)
+        auth_url = f"https://{username}:{token}@{parsed.netloc}{parsed.path}"
         engagement_id = scanner_module.defect_dojo_prep(dojo_token, dojo_url, label_name, repo_name)
 
         if scanner_name == "trivy":
