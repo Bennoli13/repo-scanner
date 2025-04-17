@@ -54,6 +54,34 @@ def scan_repo(repo_url, branch, repo_name, output_file):
     logger.info(f"Scan complete: {output_file}")
     return True, output_file
 
+def split_trufflehog_findings(file_path, max_findings=100):
+    chunks = []
+    current_chunk = []
+    count = 0
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            current_chunk.append(line)
+            count += 1
+
+            if len(current_chunk) >= max_findings:
+                temp_file = f"/tmp/trufflehog_chunk_{uuid.uuid4().hex}.json"
+                with open(temp_file, "w", encoding="utf-8") as out:
+                    out.write("\n".join(current_chunk))
+                chunks.append(temp_file)
+                current_chunk = []
+
+    if current_chunk:
+        temp_file = f"/tmp/trufflehog_chunk_{uuid.uuid4().hex}.json"
+        with open(temp_file, "w", encoding="utf-8") as out:
+            out.write("\n".join(current_chunk))
+        chunks.append(temp_file)
+
+    return chunks
+
 def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, engagement_id, skip_dojo):
     unique_id = uuid.uuid4().hex[:8]
     unique_file = os.path.join(RESULT_DIR, f"{unique_id}.json")
@@ -65,11 +93,25 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
         logging.info(f"Already uploaded: {already_uploaded}")
 
         if not skip_dojo and not already_uploaded:
-            uploaded = scanner_module.upload_to_defectdojo(
-                dojo_token, dojo_url, engagement_id, file_path,
-                tags=[branch, "trufflehog"],
-                scan_type="Trufflehog Scan"
-            )
+            chunks = split_trufflehog_findings(file_path, max_findings=50)
+            uploaded = False
+            
+            if not chunks:
+                logger.info("🛑 No findings to upload after minimizing.")
+            else:
+                for chunk_file in chunks:
+                    success = scanner_module.upload_to_defectdojo(
+                        dojo_token, dojo_url, engagement_id, chunk_file,
+                        tags=[branch, "trufflehog"],
+                        scan_type="Trufflehog Scan"
+                    )
+                    if success:
+                        uploaded = True
+                    try:
+                        os.remove(chunk_file)
+                        logger.info(f"🧹 Removed temp file: {chunk_file}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to remove temp file {chunk_file}: {e}")
             logger.info(f"Upload status: {uploaded}")
         else:
             logger.info("Skipping upload to DefectDojo (either skipped or already uploaded).")
