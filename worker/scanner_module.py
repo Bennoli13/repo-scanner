@@ -3,6 +3,10 @@ import logging
 import requests
 from datetime import datetime, timedelta
 import os
+import time
+
+RETRY_COUNT = 10
+DELAY_SECONDS = 10
 
 logging.basicConfig(
     level=logging.INFO,
@@ -95,13 +99,26 @@ def upload_to_defectdojo(token, dojo_url, engagement_id, file_path, tags, scan_t
         "close_old_findings": "false",
         "skip_duplicates": "true",
     }
-    res = requests.post(f"{dojo_url}/api/v2/import-scan/", headers=headers, files=files, data=data)
-    logger.info(f"Upload response: {res.status_code}")
-    # print log message if fail
-    if res.status_code != 201:
-        logger.error(f"Failed to upload scan file: {res.text}")
-    files["file"].close()
-    return res.ok
+    for attempt in range(1, RETRY_COUNT + 1):
+        with open(file_path, "rb") as f:
+            files = {"file": f}
+            try:
+                res = requests.post(f"{dojo_url}/api/v2/import-scan/", headers=headers, files=files, data=data)
+                logger.info(f"Upload attempt {attempt}: HTTP {res.status_code}")
+
+                if res.status_code == 201:
+                    return True
+                else:
+                    logger.warning(f"Attempt {attempt} failed: {res.text}")
+            except Exception as e:
+                logger.error(f"Attempt {attempt} raised an exception: {e}")
+
+        if attempt < RETRY_COUNT:
+            time.sleep(DELAY_SECONDS)
+
+    logger.error("❌ All upload attempts failed after retries.")
+    return False
+
 
 def upload_to_flask_app(file_path, unique_id, scanner_name, repo_name, flask_api_url):
     try:
