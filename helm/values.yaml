@@ -24,6 +24,7 @@ service:
 
 ingress:
   enabled: true
+  className: nginx-internal
   host: {your-hostname-here}
   annotations: {}
     
