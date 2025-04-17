@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 API_BASE = os.environ.get("API_BASE")
 hash_mgr = HashManager(api_base=API_BASE)
-RETRY_COUNT = 3
-DELAY_SECONDS = 5
+RETRY_COUNT = 5 
+DELAY_SECONDS = 10
 
 RESULT_DIR = "./results"
 os.makedirs(RESULT_DIR, exist_ok=True)
