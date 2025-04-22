@@ -74,7 +74,7 @@ class ScanHashRecord(db.Model):
     created_at = db.Column(db.DateTime, default=db.func.now())
 
     __table_args__ = (
-        db.UniqueConstraint("scanner", "repo_name", "branch", name="unique_scanner_repo_branch"),
+        db.UniqueConstraint("scanner", "repo_name", "branch", 'result_hash', name="unique_scanner_repo_branch"),
     )
 
 class WebhookSecret(db.Model):
