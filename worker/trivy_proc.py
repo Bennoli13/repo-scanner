@@ -118,7 +118,7 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
         return
 
     logger.info(f"Uploading findings file: {file_path}")
-    already_uploaded = hash_mgr.check_exists("trivy", repo_name, branch, file_path)
+    already_uploaded = hash_mgr.filter_new_trivy_findings("trivy", repo_name, branch, file_path)
     logging.info(f"Already uploaded: {already_uploaded}")
 
     uploaded = False

@@ -499,13 +499,12 @@ def add_hash():
     existing = ScanHashRecord.query.filter_by(
         scanner=scanner,
         repo_name=repo_name,
-        branch=branch
+        branch=branch,
+        result_hash=hash_value
     ).first()
 
     if existing:
-        existing.result_hash = hash_value
-        db.session.commit()
-        return jsonify({"message": "Hash updated"}), 200
+        return jsonify({"message": "Hash already exists"}), 200
 
     new_hash = ScanHashRecord(
         scanner=scanner,
