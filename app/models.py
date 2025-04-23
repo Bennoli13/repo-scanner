@@ -66,17 +66,17 @@ class ScheduledScan(db.Model):
     repo = db.relationship("Repository", backref=db.backref("scheduled_scans", cascade="all, delete"))
 
 class ScanHashRecord(db.Model):
+    __tablename__ = "scan_hash_record"
     id = db.Column(db.Integer, primary_key=True)
     scanner = db.Column(db.String(50), nullable=False)
-    repo_name = db.Column(db.String(255), nullable=False)  # ADD THIS
+    repo_name = db.Column(db.String(255), nullable=False)
     branch = db.Column(db.String(255), nullable=False)
-    result_hash = db.Column(db.String(64), nullable=False)
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    result_hash = db.Column(db.String(128), nullable=False)
 
     __table_args__ = (
-        db.UniqueConstraint("scanner", "repo_name", "branch", 'result_hash', name="unique_scanner_repo_branch"),
+        db.UniqueConstraint('scanner', 'repo_name', 'branch', 'result_hash', name='unique_scan_hash'),
     )
-
+    
 class WebhookSecret(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     platform = db.Column(db.String(20), nullable=False)  # 'github', 'gitlab'
