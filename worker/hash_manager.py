@@ -127,7 +127,7 @@ class HashManager:
                 hash_val = compute_line_hash(line)
                 if not hash_val:
                     continue
-                if self.is_cached(scanner, repo_name, branch, hash_val):
+                if self.is_cached(scanner, repo_name, "ignore", hash_val):
                     print(f"✅ Found existing hash: {hash_val}")
                 else:
                     print(f"❌ New hash detected: {hash_val}")
@@ -199,21 +199,21 @@ class HashManager:
             new_vulns = []
             for vuln in result.get("Vulnerabilities", []):
                 hash_val = compute_vuln_hash(vuln, target)
-                if not self.is_cached(scanner, repo_name, branch, hash_val):
+                if not self.is_cached(scanner, repo_name, "ignore", hash_val):
                     new_vulns.append(vuln)
                     recorded_hashes.add(hash_val)
 
             new_misconfigs = []
             for misconfig in result.get("Misconfigurations", []):
                 hash_val = compute_misconfig_hash(misconfig, target)
-                if not self.is_cached(scanner, repo_name, branch, hash_val):
+                if not self.is_cached(scanner, repo_name, "ignore", hash_val):
                     new_misconfigs.append(misconfig)
                     recorded_hashes.add(hash_val)
 
             new_licenses = []
             for license_info in result.get("Licenses", []):
                 hash_val = compute_license_hash(license_info, target)
-                if not self.is_cached(scanner, repo_name, branch, hash_val):
+                if not self.is_cached(scanner, repo_name, "ignore", hash_val):
                     new_licenses.append(license_info)
                     recorded_hashes.add(hash_val)
 
