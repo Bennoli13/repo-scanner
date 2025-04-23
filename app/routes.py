@@ -516,6 +516,18 @@ def add_hash():
     db.session.commit()
     return jsonify({"message": "Hash recorded"}), 201
 
+@main.route("/api/hash/export", methods=["GET"])
+def export_hashes():
+    from app.models import ScanHashRecord  # adjust import if needed
+    records = ScanHashRecord.query.all()
+    data = [{
+        "scanner": r.scanner,
+        "repo_name": r.repo_name,
+        "branch": r.branch,
+        "result_hash": r.result_hash
+    } for r in records]
+    return jsonify(data), 200
+
 # ------------------------------
 # API: Webhook Handler
 # ------------------------------
