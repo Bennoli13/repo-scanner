@@ -135,23 +135,28 @@ class HashManager:
                 hash_val = compute_line_hash(line)
                 if not hash_val:
                     continue
-                if self.is_cached(scanner, repo_name, "ignore", hash_val):
-                    print(f"✅ Found existing hash: {hash_val}")
-                else:
+                if not self.is_cached(scanner, repo_name, "ignore", hash_val):
                     print(f"❌ New hash detected: {hash_val}")
                     new_lines.append(line)
                     recorded_hashes.add(hash_val)
 
-            if new_lines:
-                with open(file_path, "w", encoding="utf-8") as f:
+            # ✅ Always overwrite the file, even if new_lines is empty
+            with open(file_path, "w", encoding="utf-8") as f:
+                if new_lines:
                     f.write("\n".join(new_lines) + "\n")
+                else:
+                    f.truncate(0)  # Ensure file is emptied if no new findings
+
+            if new_lines:
+                logger.info(f"✅ Filtered {len(new_lines)} new lines from {file_path}")
+            else:
+                logger.info("⚠️ No new findings — file cleared.")
 
             for h in recorded_hashes:
                 self._request_hash_api("POST", "add", {
                     "scanner": scanner,
                     "repo_name": repo_name,
                     "branch": "ignore",
-                    #"branch": branch,
                     "hash": h
                 })
 
@@ -227,7 +232,11 @@ class HashManager:
                     recorded_hashes.add(hash_val)
 
             if new_vulns or new_misconfigs or new_licenses:
-                new_result = dict(result)
+                new_result = {
+                    "Target": target,
+                    "Class": result.get("Class", ""),
+                    "Type": result.get("Type", ""),
+                }
                 if new_vulns:
                     new_result["Vulnerabilities"] = new_vulns
                 if new_misconfigs:
@@ -236,11 +245,11 @@ class HashManager:
                     new_result["Licenses"] = new_licenses
                 new_results.append(new_result)
 
+        data["Results"] = new_results
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+                
         if new_results:
-            data["Results"] = new_results
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(data, f)
-
             for h in recorded_hashes:
                 self._request_hash_api("POST", "add", {
                     "scanner": scanner,
