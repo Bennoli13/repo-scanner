@@ -89,6 +89,7 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
     success, file_path = scan_repo(repo_url, branch, repo_name, unique_file)
 
     if success:
+        hash_mgr = HashManager(api_base=API_BASE)
         already_uploaded = hash_mgr.filter_new_trufflehog_findings("trufflehog", repo_name, branch, file_path)
         logging.info(f"Already uploaded: {already_uploaded}")
 
