@@ -6,6 +6,9 @@ class DefectDojoConfig(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     url = db.Column(db.String(255))
     token = db.Column(db.String(255))
+    
+    def to_dict(self):
+        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
 
 class GitSourceConfig(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -16,12 +19,18 @@ class GitSourceConfig(db.Model):
     token = db.Column(db.String(255))
     repos = db.relationship("Repository", backref="source_config", cascade="all, delete")
     scanner_jobs = db.relationship("ScannerJob", backref="source_config", cascade="all, delete")
+    
+    def to_dict(self):
+        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
 
 class Repository(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255))
     source_id = db.Column(db.Integer, db.ForeignKey("git_source_config.id"))
     scanner_jobs = db.relationship("ScannerJob", backref="repository", cascade="all, delete")
+    
+    def to_dict(self):
+        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
 
 class ScannerJob(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -51,6 +60,9 @@ class ScannerJob(db.Model):
         if self.total_branch == 0:
             return 0.0
         return round(scanned_count / self.total_branch, 2)
+    
+    def to_dict(self):
+        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
 
 class ScheduledScan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -64,6 +76,9 @@ class ScheduledScan(db.Model):
 
     source = db.relationship("GitSourceConfig", backref=db.backref("scheduled_scans", cascade="all, delete"))
     repo = db.relationship("Repository", backref=db.backref("scheduled_scans", cascade="all, delete"))
+    
+    def to_dict(self):
+        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
 
 class ScanHashRecord(db.Model):
     __tablename__ = "scan_hash_record"
@@ -77,6 +92,9 @@ class ScanHashRecord(db.Model):
         db.UniqueConstraint('scanner', 'repo_name', 'branch', 'result_hash', name='unique_scan_hash'),
     )
     
+    def to_dict(self):
+        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
+    
 class WebhookSecret(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     platform = db.Column(db.String(20), nullable=False)  # 'github', 'gitlab'
@@ -84,3 +102,6 @@ class WebhookSecret(db.Model):
     created_at = db.Column(db.DateTime, default=db.func.now())
 
     __table_args__ = (db.UniqueConstraint("platform", name="unique_platform_webhook"),)
+    
+    def to_dict(self):
+        return {column.name: getattr(self, column.name) for column in self.__table__.columns}

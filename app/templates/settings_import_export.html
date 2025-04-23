@@ -1,0 +1,74 @@
+{% extends "layout.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<hr class="my-4">
+<h4 class="mb-3">Import/Export Settings</h4>
+<div class="row g-3">
+  <!-- Export Settings -->
+  <div class="col-md-6">
+    <h5>Export</h5>
+    <button class="btn btn-primary me-2" onclick="downloadJSON('/export/settings')">📦 Export Settings</button>
+    <button class="btn btn-primary" onclick="downloadJSON('/export/hash')">🔐 Export Hash Records</button>
+  </div>
+
+  <!-- Import Settings -->
+  <div class="col-md-6">
+    <h5>Import</h5>
+    <form id="import-settings-form" class="mb-2">
+      <label for="settings-file" class="form-label">Settings JSON</label>
+      <input class="form-control" type="file" id="settings-file" accept=".json">
+      <button class="btn btn-success mt-2" type="button" onclick="uploadJSON('/import/settings', 'settings-file')">📥 Import Settings</button>
+    </form>
+    <form id="import-hash-form">
+      <label for="hash-file" class="form-label">Hash JSON</label>
+      <input class="form-control" type="file" id="hash-file" accept=".json">
+      <button class="btn btn-success mt-2" type="button" onclick="uploadJSON('/import/hash', 'hash-file')">📥 Import Hash</button>
+    </form>
+  </div>
+</div>
+<script>
+    async function downloadJSON(endpoint) {
+      const res = await fetch(endpoint);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const timestamp = new Date().toISOString().split("T")[0];
+        a.download = endpoint.includes("hash") ? `hash_export_${timestamp}.json` : `settings_export_${timestamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        alert("⚠️ Failed to download file");
+      }
+    }
+    
+    async function uploadJSON(endpoint, inputId) {
+        const input = document.getElementById(inputId);
+        const file = input.files[0];
+        if (!file) {
+          alert("⚠️ Please select a file first.");
+          return;
+        }
+      
+        const text = await file.text();
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"  // Remove this line!
+          },
+          body: text,
+        });
+      
+        const data = await res.json();
+        if (res.ok) {
+          alert("✅ Import successful!");
+        } else {
+          alert("❌ Import failed: " + (data.error || "Unknown error"));
+        }
+      }
+      
+    </script>
+{% endblock %}

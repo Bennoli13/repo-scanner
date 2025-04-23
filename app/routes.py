@@ -5,6 +5,7 @@ from .utils import encrypt_token, decrypt_token, push_scan_job_to_queue, push_we
 
 from sqlalchemy import and_
 from datetime import datetime
+from dateutil import parser as date_parser
 
 from werkzeug.utils import secure_filename
 import zipfile
@@ -28,6 +29,11 @@ def index():
 def settings():
     dojo = DefectDojoConfig.query.first()
     return render_template("settings.html", dojo=dojo)
+
+@main.route("/settings/import-export")
+def settings_import_export():
+    dojo = DefectDojoConfig.query.first()
+    return render_template("settings_import_export.html")
 
 @main.route("/repos")
 def repos():
@@ -647,3 +653,60 @@ def handle_webhook(platform):
             "is_webhook": True
         })
     return jsonify({"message": "Webhook accepted"}), 200
+
+# ------------------------------
+# Export / Import Setting 
+# ------------------------------
+@main.route("/export/settings", methods=["GET"])
+def export_settings():
+    data = {
+        "defectdojo": [dojo.to_dict() for dojo in DefectDojoConfig.query.all()],
+        "git_sources": [g.to_dict() for g in GitSourceConfig.query.all()],
+        "repos": [r.to_dict() for r in Repository.query.all()],
+        "scanner_jobs": [j.to_dict() for j in ScannerJob.query.all()],
+        "scheduled_scans": [s.to_dict() for s in ScheduledScan.query.all()],
+        "webhook_secrets": [w.to_dict() for w in WebhookSecret.query.all()]
+    }
+    return jsonify(data)
+
+
+@main.route("/import/settings", methods=["POST"])
+def import_settings():
+    data = request.get_json()
+    try:
+        for dojo in data.get("defectdojo", []):
+            db.session.merge(DefectDojoConfig(**dojo))
+        for g in data.get("git_sources", []):
+            db.session.merge(GitSourceConfig(**g))
+        for r in data.get("repos", []):
+            db.session.merge(Repository(**r))
+        for j in data.get("scanner_jobs", []):
+            db.session.merge(ScannerJob(**j))
+        for s in data.get("scheduled_scans", []):
+            db.session.merge(ScheduledScan(**s))
+        for w in data.get("webhook_secrets", []):
+            if isinstance(w.get("created_at"), str):
+                w["created_at"] = date_parser.parse(w["created_at"])
+            db.session.merge(WebhookSecret(**w))
+        db.session.commit()
+        return jsonify({"message": "Settings imported"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Import failed: {e}"}), 500
+
+@main.route("/export/hash", methods=["GET"])
+def export_hashes_html():
+    hashes = ScanHashRecord.query.all()
+    return jsonify([h.to_dict() for h in hashes])
+
+@main.route("/import/hash", methods=["POST"])
+def import_hashes():
+    data = request.get_json()
+    try:
+        for h in data:
+            db.session.merge(ScanHashRecord(**h))
+        db.session.commit()
+        return jsonify({"message": "Hash records imported"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Hash import failed: {e}"}), 500
