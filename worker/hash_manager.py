@@ -97,7 +97,8 @@ class HashManager:
         return self._request_hash_api("POST", "add", data={
             "scanner": scanner,
             "repo_name": repo_name,
-            "branch": branch,
+            "branch": "ignore",
+            #"branch": branch,
             "hash": result_hash
         }, params=None)
 
@@ -142,7 +143,8 @@ class HashManager:
                 self._request_hash_api("POST", "add", {
                     "scanner": scanner,
                     "repo_name": repo_name,
-                    "branch": branch,
+                    "branch": "ignore",
+                    #"branch": branch,
                     "hash": h
                 })
 
@@ -236,7 +238,8 @@ class HashManager:
                 self._request_hash_api("POST", "add", {
                     "scanner": scanner,
                     "repo_name": repo_name,
-                    "branch": branch,
+                    #"branch": branch,
+                    "branch": "ignore",
                     "hash": h
                 })
             return True
