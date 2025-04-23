@@ -30,8 +30,13 @@ class HashManager:
 
     def is_cached(self, scanner, repo_name, branch, hash_val):
         try:
+            if not os.path.exists(self.cache_file):
+                logger.warning(f"⚠️ Cache file {self.cache_file} missing. Re-downloading...")
+                self.cache_file = self.load_hash_cache()
+
             with open(self.cache_file, "r", encoding="utf-8") as f:
                 cache = json.load(f)
+
             for item in cache:
                 if (
                     item["scanner"] == scanner and
@@ -40,8 +45,10 @@ class HashManager:
                     item["result_hash"] == hash_val
                 ):
                     return True
+
         except Exception as e:
             logger.warning(f"⚠️ Failed to check local cache: {e}")
+
         return False
 
     def compute_file_hash(self, scanner, file_path):
