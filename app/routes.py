@@ -523,7 +523,7 @@ def export_hashes():
     data = [{
         "scanner": r.scanner,
         "repo_name": r.repo_name,
-        "branch": r.branch,
+        "branch": "ignore", #ignore the branch 
         "result_hash": r.result_hash
     } for r in records]
     return jsonify(data), 200
