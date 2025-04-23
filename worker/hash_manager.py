@@ -147,11 +147,6 @@ class HashManager:
                 else:
                     f.truncate(0)  # Ensure file is emptied if no new findings
 
-            if new_lines:
-                logger.info(f"✅ Filtered {len(new_lines)} new lines from {file_path}")
-            else:
-                logger.info("⚠️ No new findings — file cleared.")
-
             for h in recorded_hashes:
                 self._request_hash_api("POST", "add", {
                     "scanner": scanner,
@@ -159,11 +154,17 @@ class HashManager:
                     "branch": "ignore",
                     "hash": h
                 })
-
+            
+            if new_lines:
+                logger.info(f"✅ Filtered {len(new_lines)} new lines from {file_path}")
+            else:
+                logger.info("⚠️ No new findings — file cleared.")
+                return True
+            
         except Exception as e:
             logger.error(f"❌ Error filtering TruffleHog findings: {e}")
 
-        return bool(new_lines)
+        return False
 
     def filter_new_trivy_findings(self, scanner, repo_name, branch, file_path):
         def compute_vuln_hash(vuln, target):
@@ -258,5 +259,5 @@ class HashManager:
                     "branch": "ignore",
                     "hash": h
                 })
-            return True
-        return False
+            return False
+        return True
