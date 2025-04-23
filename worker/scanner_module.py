@@ -92,7 +92,7 @@ def upload_to_defectdojo(token, dojo_url, engagement_id, file_path, tags, scan_t
     data = {
         "scan_type": scan_type,
         "engagement": engagement_id,
-        "tags": ",".join(tags),
+        "tags": tags[0],
         "minimum_severity": "Low",
         "active": "true",
         "verified": "false",

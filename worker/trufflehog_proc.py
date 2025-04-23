@@ -103,7 +103,7 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
                 for chunk_file in chunks:
                     success = scanner_module.upload_to_defectdojo(
                         dojo_token, dojo_url, engagement_id, chunk_file,
-                        tags=[branch, "trufflehog"],
+                        tags=[branch],
                         scan_type="Trufflehog Scan"
                     )
                     if success:
