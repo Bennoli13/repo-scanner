@@ -20,18 +20,41 @@ Whether you're a security engineer, SRE, or developer responsible for maintainin
 
 ---
 
-## 💡 Features
+## 🔧 Features
+- **GitHub/GitLab Integration**  
+  - Support for multiple Git source configurations (URL, token, user)
+  - Add repositories manually via UI or API
+  - Trigger scans per repository
 
-- 🖥️ **Web UI (Flask)** to configure Git/GitLab sources, repo lists, and scan parameters  
-- 🐇 **RabbitMQ** integration for scalable job queuing  
-- ⚙️ **Worker** apps to execute scans concurrently  
-- 🔍 Supports:
-  - [TruffleHog](https://github.com/trufflesecurity/trufflehog) for secrets scanning  
-  - [Trivy](https://github.com/aquasecurity/trivy) for vulnerability scanning in codebases and Dockerfiles  
-- 📦 Uploads findings to DefectDojo via API  
-- 🔄 Keeps track of completed scans per repository  
-- 🔐 Secure token encryption using `Fernet`  
+- **Scanning Framework**
+  - Currently supports:
+    - [TruffleHog](https://github.com/trufflesecurity/trufflehog)
+    - [Trivy](https://github.com/aquasecurity/trivy)
+  - Scans all branches per repo in parallel
+  - CLI-based worker consumes jobs via RabbitMQ
 
+- **DefectDojo Integration**
+  - Auto-create Product & Engagement if not found
+  - Upload findings with metadata (branch, commit, scanner)
+  - Deduplication supported (both at hash and finding level)
+
+- **Hash Caching & Deduplication**
+  - Caches previously uploaded hashes locally and via API
+  - Avoids duplicate upload to DefectDojo
+  - Export/import hash cache for continuity
+
+- **Scheduling**
+  - Cron-style scan scheduling per repo
+  - Stored in the DB and processed by worker
+
+- **Git Webhook Support**
+  - Webhook listener triggers scans per push or merge
+  - Shared scanner logic reused across features
+
+- **UI Features**
+  - Bootstrap-based settings dashboard
+  - Export/import settings and hash cache via web UI
+  - Download `.json` backup and re-import anytime
 ---
 
 ## 🚀 Getting Started
@@ -88,14 +111,20 @@ Visit: http://localhost:5001
 
 # 🔧 Architecture Overview
 ```
-+------------+        +--------------------+       +---------------+
-|  Flask Web | -----> |  RabbitMQ Queue    | --->  |  Worker(s)    |
-|  (Frontend)|        |  (scanner_jobs)    |       |  (Scanner +   |
-|            |        |                    |       |   Upload)     |
-+------------+        +--------------------+       +---------------+
-        |                                              |
-        +----------------------------------------------+
-                      Updates scan status to DB
+```text
++---------+     +-----------+     +--------------+
+|  Front  | --> | Flask API | --> |   Database   |
+| (Config)|     |  (REST)   |     |   (SQLite)   |
++---------+     +-----------+     +--------------+
+                              ↑
+         +------------------+ |
+         | RabbitMQ (Queue) | |
+         +------------------+ |
+                              ↓
+                        +-----------+
+                        |   Worker  |
+                        | (scanner) |
+                        +-----------+
 ```
 ---
 
@@ -112,13 +141,23 @@ repo-scanner/
 ```
 ---
 
-# 📖 Roadmap
-* Add support for more scanners (e.g., Gitleaks, Bandit)
-* Schedule scans (cron-based)
-* Alerting via Slack/Email
-* Scan result visualization in dashboard
+# 🧪 Usage
+* Access the dashboard via http://localhost:5000
+* Add Git sources and repositories
+* Trigger scan or schedule it via UI
+* Upload .json export to restore settings/hash cache
+* Webhook support available via /webhook
 
 ---
+
+# 📁 API Highlights
+Method	Endpoint	Description
+POST	/api/scan	Trigger a scan job
+GET	/export/settings	Export all config data
+GET	/export/hash	Export all hash records
+POST	/import/settings	Import config data
+POST	/import/hash	Import hash records
+POST	/webhook	Git push event (scan trigger)
 
 # 🤝 Contributions
 PRs and issues are welcome! Please open a discussion if you want to contribute a new scanner or integration.
