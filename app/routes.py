@@ -669,7 +669,6 @@ def export_settings():
     }
     return jsonify(data)
 
-
 @main.route("/import/settings", methods=["POST"])
 def import_settings():
     data = request.get_json()
@@ -681,6 +680,10 @@ def import_settings():
         for r in data.get("repos", []):
             db.session.merge(Repository(**r))
         for j in data.get("scanner_jobs", []):
+            if isinstance(j.get("created_at"), str):
+                j["created_at"] = date_parser.parse(j["created_at"])
+            if isinstance(j.get("updated_at"), str):
+                j["updated_at"] = date_parser.parse(j["updated_at"])
             db.session.merge(ScannerJob(**j))
         for s in data.get("scheduled_scans", []):
             db.session.merge(ScheduledScan(**s))
