@@ -11,7 +11,7 @@
         <select id="source_id" class="form-select" required onchange="loadRepos()">
             <option value="">-- Select Git Source --</option>
             {% for src in sources %}
-              <option value="{{ src.id }}">{{ src.platform }} - {{ src.base_url }}</option>
+              <option value="{{ src.id }}">{{ src.label_name }}</option>
             {% endfor %}
           </select>
     </div>

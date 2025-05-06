@@ -1,5 +1,6 @@
 from . import db
 from sqlalchemy.ext.mutable import MutableList
+from datetime import datetime
 
 
 class DefectDojoConfig(db.Model):
@@ -87,11 +88,12 @@ class ScanHashRecord(db.Model):
     repo_name = db.Column(db.String(255), nullable=False)
     branch = db.Column(db.String(255), nullable=False)
     result_hash = db.Column(db.String(128), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
 
     __table_args__ = (
         db.UniqueConstraint('scanner', 'repo_name', 'branch', 'result_hash', name='unique_scan_hash'),
     )
-    
+
     def to_dict(self):
         return {column.name: getattr(self, column.name) for column in self.__table__.columns}
     
