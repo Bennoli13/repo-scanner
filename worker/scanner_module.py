@@ -86,6 +86,51 @@ def get_or_create_engagement(token, dojo_url, product_id, repo_name):
     res = requests.post(f"{dojo_url}/api/v2/engagements/", json=payload, headers=headers)
     return res.json()["id"]
 
+def get_product_and_engagement_name(api_url, api_key, engagement_id):
+    """
+    Fetches product name and engagement name from DefectDojo for a given engagement ID.
+
+    :param api_url: Base URL of the DefectDojo instance (e.g., 'https://your-dojo.com/api/v2')
+    :param api_key: API key for DefectDojo
+    :param engagement_id: ID of the engagement
+    :return: Tuple of (product_name, engagement_name), or (None, None) if not found
+    """
+    headers = {
+        "Authorization": f"Token {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.get(
+            f"{api_url}/api/v2/engagements/{engagement_id}/",
+            headers=headers,
+            timeout=10
+        )
+        response.raise_for_status()
+        data = response.json()
+        engagement_name = data.get("name")
+        product_id = data.get("product")
+        response = requests.get(
+            f"{api_url}/api/v2/products/{product_id}/",
+            headers=headers,
+            timeout=10
+        )
+        response.raise_for_status()
+        data = response.json()
+        # Extract product name from the product data
+        product_name = data.get("name")
+
+        return product_name, engagement_name
+
+    except requests.RequestException as e:
+        print(f"Request error: {e}")
+        return None, None
+    except ValueError as e:
+        print(f"JSON parse error: {e}")
+        print(f"Raw response: {response.text}")
+        return None, None
+
+    
 def upload_to_defectdojo(token, dojo_url, engagement_id, file_path, tags, scan_type):
     today = datetime.now().date().isoformat()
     headers = {"Authorization": f"Token {token}"}
@@ -95,7 +140,10 @@ def upload_to_defectdojo(token, dojo_url, engagement_id, file_path, tags, scan_t
         tag_ = tags[0]
     else:
         tag_ = tags
+    product_name, engagement_name = get_product_and_engagement_name(dojo_url, token, engagement_id)
     data = {
+        "product_name": product_name,
+        "engagement_name": engagement_name,
         "scan_type": scan_type,
         "engagement": engagement_id,
         "tags": tag_,
