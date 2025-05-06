@@ -7,3 +7,4 @@ cryptography
 python-dotenv
 requests 
 APScheduler
+python-dateutil
