@@ -87,7 +87,7 @@ def get_or_create_engagement(token, dojo_url, product_id, repo_name):
     return res.json()["id"]
 
 def upload_to_defectdojo(token, dojo_url, engagement_id, file_path, tags, scan_type, branch=None, commit=None):
-    today = datetime.now().replace(microsecond=0).isoformat()
+    today = datetime.now().date().isoformat()
     headers = {"Authorization": f"Token {token}"}
     files = {"file": open(file_path, "rb")}
     data = {
