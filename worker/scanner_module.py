@@ -86,14 +86,19 @@ def get_or_create_engagement(token, dojo_url, product_id, repo_name):
     res = requests.post(f"{dojo_url}/api/v2/engagements/", json=payload, headers=headers)
     return res.json()["id"]
 
-def upload_to_defectdojo(token, dojo_url, engagement_id, file_path, tags, scan_type, branch=None, commit=None):
+def upload_to_defectdojo(token, dojo_url, engagement_id, file_path, tags, scan_type):
     today = datetime.now().date().isoformat()
     headers = {"Authorization": f"Token {token}"}
     files = {"file": open(file_path, "rb")}
+    #check if tags is a list
+    if isinstance(tags, list):
+        tag_ = tags[0]
+    else:
+        tag_ = tags
     data = {
         "scan_type": scan_type,
         "engagement": engagement_id,
-        "tags": ",".join(tags),
+        "tags": tag_,
         "minimum_severity": "Low",
         "active": "true",
         "verified": "false",
@@ -105,8 +110,8 @@ def upload_to_defectdojo(token, dojo_url, engagement_id, file_path, tags, scan_t
         "apply_tags_to_findings": "true",
         "apply_tags_to_endpoints": "true",
         "deduplication_on_engagement": "true",
-        "branch_tag": branch or "",
-        "commit_hash": commit or "",
+        "auto_create_context": "true",
+        "environment": "prod",
     }
     for attempt in range(1, RETRY_COUNT + 1):
         with open(file_path, "rb") as f:
