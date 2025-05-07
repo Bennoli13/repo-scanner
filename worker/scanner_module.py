@@ -61,7 +61,7 @@ def get_or_create_product(token, dojo_url, product_name):
         "name": product_name,
         "description": f"Product auto-created for {product_name}",
         "prod_type": prod_type_id,
-        "sla_configuration": None  # Optional: set an SLA ID if available
+        "sla_configuration": 1  # Optional: set an SLA ID if available
     }
 
     res = requests.post(f"{dojo_url}/api/v2/products/", json=payload, headers=headers)
@@ -86,18 +86,80 @@ def get_or_create_engagement(token, dojo_url, product_id, repo_name):
     res = requests.post(f"{dojo_url}/api/v2/engagements/", json=payload, headers=headers)
     return res.json()["id"]
 
+def get_product_and_engagement_name(api_url, api_key, engagement_id):
+    """
+    Fetches product name and engagement name from DefectDojo for a given engagement ID.
+
+    :param api_url: Base URL of the DefectDojo instance (e.g., 'https://your-dojo.com/api/v2')
+    :param api_key: API key for DefectDojo
+    :param engagement_id: ID of the engagement
+    :return: Tuple of (product_name, engagement_name), or (None, None) if not found
+    """
+    headers = {
+        "Authorization": f"Token {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.get(
+            f"{api_url}/api/v2/engagements/{engagement_id}/",
+            headers=headers,
+            timeout=10
+        )
+        response.raise_for_status()
+        data = response.json()
+        engagement_name = data.get("name")
+        product_id = data.get("product")
+        response = requests.get(
+            f"{api_url}/api/v2/products/{product_id}/",
+            headers=headers,
+            timeout=10
+        )
+        response.raise_for_status()
+        data = response.json()
+        # Extract product name from the product data
+        product_name = data.get("name")
+
+        return product_name, engagement_name
+
+    except requests.RequestException as e:
+        print(f"Request error: {e}")
+        return None, None
+    except ValueError as e:
+        print(f"JSON parse error: {e}")
+        print(f"Raw response: {response.text}")
+        return None, None
+
+    
 def upload_to_defectdojo(token, dojo_url, engagement_id, file_path, tags, scan_type):
+    today = datetime.now().date().isoformat()
     headers = {"Authorization": f"Token {token}"}
     files = {"file": open(file_path, "rb")}
+    #check if tags is a list
+    if isinstance(tags, list):
+        tag_ = tags[0]
+    else:
+        tag_ = tags
+    product_name, engagement_name = get_product_and_engagement_name(dojo_url, token, engagement_id)
     data = {
+        "product_name": product_name,
+        "engagement_name": engagement_name,
         "scan_type": scan_type,
         "engagement": engagement_id,
-        "tags": ",".join(tags),
+        "tags": tag_,
         "minimum_severity": "Low",
         "active": "true",
         "verified": "false",
         "close_old_findings": "false",
         "skip_duplicates": "true",
+        "scan_date": today,
+        "group_by": "component_name",
+        "create_finding_groups_for_all_findings": "true",
+        "apply_tags_to_findings": "true",
+        "apply_tags_to_endpoints": "true",
+        "deduplication_on_engagement": "true",
+        "auto_create_context": "true",
+        "environment": "prod",
     }
     for attempt in range(1, RETRY_COUNT + 1):
         with open(file_path, "rb") as f:
@@ -138,3 +200,4 @@ def upload_to_flask_app(file_path, unique_id, scanner_name, repo_name, flask_api
             os.remove(file_path)
     except Exception as e:
         logger.error(f"❌ Exception during Flask file upload: {str(e)}")
+
