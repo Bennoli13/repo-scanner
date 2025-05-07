@@ -577,8 +577,8 @@ def verify_github_signature(secret, payload, signature_header):
     expected = 'sha256=' + hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature_header or '')
 
-@main.route("/webhook/<platform>", methods=["POST"])
-def handle_webhook(platform):
+@main.route("/webhook/<platform>/<int:git_config_id>", methods=["POST"])
+def handle_webhook(platform, git_config_id):
     raw_body = request.data
 
     secret_entry = WebhookSecret.query.filter_by(platform=platform).first()
@@ -613,20 +613,15 @@ def handle_webhook(platform):
         return jsonify({"error": "Unsupported platform"}), 400
 
     # 🔧 You can add logic here to select which scanner(s) to use
-    sources_list = GitSourceConfig.query.all()
-    source = None
-    repo_name = None
-
-    for s in sources_list:
-        prefix = s.base_url.rstrip("/") + "/"
-        if repo_url.startswith(prefix):
-            source = s
-            repo_name = repo_url.replace(prefix, "").replace(".git", "")
-            break
-
-    if not source or not repo_name:
-        return jsonify({"error": "Git source config not found or repo name parsing failed"}), 404
-
+    source = GitSourceConfig.query.filter_by(id=git_config_id).first()
+    if not source:
+        return jsonify({"error": "Git source config not found"}), 404
+    
+    #extract repo name from url
+    prefix = source.base_url.rstrip("/") + "/"
+    if not repo_url.startswith(prefix):
+        return jsonify({"error": "Repo URL doesn't match base_url"}), 400
+    repo_name = repo_url.replace(prefix, "").replace(".git", "")
     repo = Repository.query.filter_by(name=repo_name, source_id=source.id).first()
     dojo = DefectDojoConfig.query.first()
     
