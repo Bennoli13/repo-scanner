@@ -61,7 +61,7 @@ def get_or_create_product(token, dojo_url, product_name):
         "name": product_name,
         "description": f"Product auto-created for {product_name}",
         "prod_type": prod_type_id,
-        "sla_configuration": None  # Optional: set an SLA ID if available
+        "sla_configuration": 1  # Optional: set an SLA ID if available
     }
 
     res = requests.post(f"{dojo_url}/api/v2/products/", json=payload, headers=headers)
@@ -200,3 +200,5 @@ def upload_to_flask_app(file_path, unique_id, scanner_name, repo_name, flask_api
             os.remove(file_path)
     except Exception as e:
         logger.error(f"❌ Exception during Flask file upload: {str(e)}")
+
+get_or_create_product("***REMOVED***", "***REMOVED***", "test_product")  
