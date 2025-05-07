@@ -201,4 +201,3 @@ def upload_to_flask_app(file_path, unique_id, scanner_name, repo_name, flask_api
     except Exception as e:
         logger.error(f"❌ Exception during Flask file upload: {str(e)}")
 
-get_or_create_product("***REMOVED***", "***REMOVED***", "test_product")  
