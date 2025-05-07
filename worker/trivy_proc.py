@@ -177,8 +177,8 @@ def main(data):
         logger.info(f"No branches found for {repo_url}. Skipping...")
         return
 
-    engagement_id = scanner_module.defect_dojo_prep(dojo_token, dojo_url, label_name, repo_name)
-    
+    engagement_id = scanner_module.defect_dojo_prep(dojo_token, dojo_url, label_name, repo_name)  
+    logger.info(f"Label Name: {label_name}, Engagement ID: {engagement_id}, Repo Name: {repo_name}")
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         futures = [executor.submit(
             scan_and_upload_branch, full_url, branch, repo_name, dojo_token, dojo_url, engagement_id, skip_dojo
@@ -206,6 +206,9 @@ def main_webhook(data):
     else:
         engagement_id = None
         logger.info("Skipping DefectDojo setup (no token/url).")
+        
+    #log the label_name, egangement_id, and repo_name
+    logger.info(f"Label Name: {label_name}, Engagement ID: {engagement_id}, Repo Name: {repo_name}")
 
     # Scan and upload the specific branch only
     scan_and_upload_branch(
