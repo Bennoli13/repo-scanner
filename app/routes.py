@@ -474,6 +474,8 @@ def update_schedule_last_run(schedule_id):
 # ------------------------------
 @main.route("/api/hash/check", methods=["GET"])
 def check_hash():
+    #temporary disable deduplication on repo-scanner
+    return jsonify({"exists": False})
     scanner = request.args.get("scanner")
     repo_name = request.args.get("repo_name")
     branch = request.args.get("branch")
@@ -493,6 +495,8 @@ def check_hash():
 
 @main.route("/api/hash/add", methods=["POST"])
 def add_hash():
+    #temporary disable deduplication on repo-scanner
+    return jsonify({"message": "Dedup disabled"}), 201
     data = request.get_json()
     scanner = data.get("scanner")
     repo_name = data.get("repo_name")
@@ -524,6 +528,8 @@ def add_hash():
 
 @main.route("/api/hash/export", methods=["GET"])
 def export_hashes():
+    #temporary disable deduplication on repo-scanner
+    return jsonify([]), 200
     from app.models import ScanHashRecord  # adjust import if needed
     records = ScanHashRecord.query.all()
     data = [{
