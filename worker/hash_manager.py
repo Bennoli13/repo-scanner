@@ -73,12 +73,12 @@ class HashManager:
         try:
             if method == "GET":
                 res = requests.get(url, params=params)
-                print(res.text)
+                #print(res.text)
                 if res.ok:
                     return res.json().get("exists", False)
             elif method == "POST":
                 res = requests.post(url, json=data)
-                print(res.text)
+                #print(res.text)
                 return res.ok
         except Exception as e:
             logger.warning(f"Hash API {method} {path} failed: {e}")
@@ -129,9 +129,10 @@ class HashManager:
                 if not hash_val:
                     continue
                 if self.is_cached(scanner, repo_name, "ignore", hash_val):
-                    print(f"✅ Found existing hash: {hash_val}")
+                    #print(f"✅ Found existing hash: {hash_val}")
+                    continue
                 else:
-                    print(f"❌ New hash detected: {hash_val}")
+                    #print(f"❌ New hash detected: {hash_val}")
                     new_lines.append(line)
                     recorded_hashes.add(hash_val)
 
