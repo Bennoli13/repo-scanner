@@ -117,10 +117,16 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
         logger.info(f"==== No findings to upload for branch {branch} ===")
         return
 
+    # Create a temporary copy of the scan file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
+        dedup_path = tmp.name
+        shutil.copyfile(file_path, dedup_path)
+
+    
     logger.info(f"Uploading findings file: {file_path}")
-    #already_uploaded = hash_mgr.filter_new_trivy_findings("trivy", repo_name, branch, file_path)
+    already_uploaded = hash_mgr.filter_new_trivy_findings("trivy", repo_name, branch, dedup_path)
     #skip deduplication on local runs
-    already_uploaded = False
+    #already_uploaded = False
     logging.info(f"Already uploaded: {already_uploaded}")
 
     uploaded = False
