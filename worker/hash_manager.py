@@ -42,6 +42,30 @@ class HashManager:
         except Exception as e:
             logger.warning(f"Hash API {method} {path} failed: {e}")
         return False
+    
+    def compute_file_hash(self, scanner, file_path):
+        try:
+            if scanner == "trufflehog":
+                lines = []
+                with open(file_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        item = json.loads(line.strip())
+                        git = item.get("SourceMetadata", {}).get("Data", {}).get("Git", {})
+                        raw = item.get("Raw", "")
+                        combined = f"{git.get('commit', '')}|{git.get('file', '')}|{raw}"
+                        lines.append(combined)
+                joined = "\n".join(sorted(lines))
+                return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+            elif scanner == "trivy":
+                with open(file_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                results = data.get("Results", [])
+                return hashlib.sha256(json.dumps(results, sort_keys=True).encode("utf-8")).hexdigest()
+
+        except Exception as e:
+            logger.error(f"⚠️ Failed to compute hash for {scanner} on {file_path}: {e}")
+        return None
 
     def record(self, scanner, repo_name, branch, file_path):
         result_hash = self.compute_file_hash(scanner, file_path)
