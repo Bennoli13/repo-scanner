@@ -2,6 +2,7 @@ import pika
 import json
 from cryptography.fernet import Fernet
 import os
+import requests
 
 # Generate this once and save it as a secret (don't regenerate every time!)
 FERNET_KEY = os.environ.get("FERNET_KEY", Fernet.generate_key())
@@ -54,3 +55,33 @@ def push_webhook_job_to_queue(job_data: dict):
     )
 
     connection.close()
+    
+def validate_github_token(token: str) -> bool:
+    """
+    Validates a GitHub personal access token by calling the /user API.
+    Returns True if valid, False if unauthorized.
+    """
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    try:
+        res = requests.get("https://api.github.com/user", headers=headers, timeout=5)
+        return res.status_code == 200
+    except requests.RequestException:
+        return False
+    
+def validate_gitlab_token(token: str, base_url: str) -> bool:
+    headers = {
+        "PRIVATE-TOKEN": token
+    }
+    try:
+        res = requests.get(f"{base_url.rstrip('/')}/api/v4/user", headers=headers, timeout=5)
+        if res.status_code == 200:
+            return True
+        if res.status_code == 403 and "insufficient_scope" in res.text:
+            # Token is valid but doesn't have user-level read scope
+            return True
+        return False
+    except requests.RequestException:
+        return False

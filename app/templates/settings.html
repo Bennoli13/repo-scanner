@@ -50,6 +50,33 @@
 </ul>
 
 <hr>
+<!-- Modal for updating token -->
+<div class="modal fade" id="tokenModal" tabindex="-1" aria-labelledby="tokenModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="updateTokenForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="tokenModalLabel">Update Access Token</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="editTokenId">
+          <div class="mb-3">
+            <label for="editTokenInput" class="form-label">New Access Token</label>
+            <input type="password" class="form-control" id="editTokenInput" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Save Token</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<hr>
+
 
 <!-- Git Webhook Secrets List -->
 <h5 class="mt-4">Webhook Secrets</h5>
@@ -153,7 +180,11 @@
           <strong>${cfg.platform}</strong> | <strong>[${cfg.label_name || "Unnamed"}] | Webhook_ID:<strong>${cfg.id}</strong><br>
           <small>${cfg.base_url}</small>
         </div>
-        <button class="btn btn-sm btn-danger" onclick="deleteConfig(${cfg.id})">Delete</button>
+        <div class="btn-group">
+          <button class="btn btn-sm btn-info" onclick="checkToken(${cfg.id})">Check</button>
+          <button class="btn btn-sm btn-warning" onclick="openTokenModal(${cfg.id})">Change Token</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteConfig(${cfg.id})">Delete</button>
+        </div>
       `;
       list.appendChild(li);
     });
@@ -212,6 +243,57 @@
     tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
   });
 </script>
+
+<!-- Modal Script -->
+<script>
+  function openTokenModal(id) {
+    document.getElementById("editTokenId").value = id;
+    document.getElementById("editTokenInput").value = "";
+    const modal = new bootstrap.Modal(document.getElementById("tokenModal"));
+    modal.show();
+  }
+  
+  document.getElementById("updateTokenForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+    const id = document.getElementById("editTokenId").value;
+    const token = document.getElementById("editTokenInput").value;
+  
+    const res = await fetch(`/api/settings/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token })
+    });
+  
+    if (res.ok) {
+      alert("Token updated!");
+      bootstrap.Modal.getInstance(document.getElementById("tokenModal")).hide();
+    } else {
+      let message = "None";
+      try {
+        const data = await res.json();
+        message = data.message || "None";
+      } catch (e) {
+        // JSON parse failed, keep default message
+      }
+      alert(`Failed to update token. Reason: ${message}`);
+    }
+  });
+  async function checkToken(id) {
+    const res = await fetch(`/api/settings/${id}/check`);
+    if (res.ok) {
+      const data = await res.json();
+      alert(`✅ Token is valid: ${data.platform.toUpperCase()} - ${data.username}`);
+    } else {
+      try {
+        const data = await res.json();
+        alert(`❌ Invalid token: ${data.message || "Unknown reason"}`);
+      } catch {
+        alert("❌ Failed to validate token: Unknown error");
+      }
+    }
+  }
+</script>
+
 <!-- JS for Scheduler -->
 <script>
   async function loadGitSources() {
