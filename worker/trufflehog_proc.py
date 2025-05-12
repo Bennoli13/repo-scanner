@@ -7,6 +7,8 @@ import concurrent.futures
 from . import scanner_module
 from .hash_manager import HashManager
 import time
+import shutil
+import tempfile
 
 logging.basicConfig(
     level=logging.INFO,
@@ -87,11 +89,16 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
     unique_file = os.path.join(RESULT_DIR, f"{unique_id}.json")
 
     success, file_path = scan_repo(repo_url, branch, repo_name, unique_file)
+    
+    # Create a temporary copy of the scan file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
+        dedup_path = tmp.name
+        shutil.copyfile(file_path, dedup_path)
 
     if success:
-        #already_uploaded = hash_mgr.filter_new_trufflehog_findings("trufflehog", repo_name, branch, file_path)
+        already_uploaded = hash_mgr.filter_new_trufflehog_findings("trufflehog", repo_name, branch, dedup_path)
         #skip deduplication on local runs
-        already_uploaded = False
+        #already_uploaded = False
         logging.info(f"Already uploaded: {already_uploaded}")
 
         if not skip_dojo and not already_uploaded:
