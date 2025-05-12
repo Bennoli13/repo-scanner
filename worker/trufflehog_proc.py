@@ -96,7 +96,8 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
         shutil.copyfile(file_path, dedup_path)
 
     if success:
-        already_uploaded = hash_mgr.filter_new_trufflehog_findings("trufflehog", repo_name, branch, dedup_path)
+        ignore_branch = "ignored"
+        already_uploaded = hash_mgr.filter_new_trufflehog_findings("trufflehog", repo_name, ignore_branch, dedup_path)
         #skip deduplication on local runs
         #already_uploaded = False
         logging.info(f"Already uploaded: {already_uploaded}")
