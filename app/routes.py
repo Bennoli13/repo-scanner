@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, Flask, send_file, send_from_directory
 from . import db
 from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan, ScanHashRecord, WebhookSecret
-from .utils import encrypt_token, decrypt_token, push_scan_job_to_queue, push_webhook_job_to_queue
+from .utils import encrypt_token, decrypt_token, push_scan_job_to_queue, push_webhook_job_to_queue, validate_github_token, validate_gitlab_token
 
 from sqlalchemy import and_
 from datetime import datetime
@@ -106,6 +106,56 @@ def delete_git_config():
     db.session.delete(config)
     db.session.commit()
     return jsonify({"message": "Config deleted"}), 200
+
+@main.route("/api/settings/<int:config_id>", methods=["GET", "PUT"])
+def git_config_detail(config_id):
+    config = GitSourceConfig.query.get_or_404(config_id)
+
+    if request.method == "GET":
+        return jsonify({
+            "id": config.id,
+            "platform": config.platform,
+            "label_name": config.label_name,
+            "base_url": config.base_url,
+            "username": config.username
+            # do not return the token
+        })
+
+    elif request.method == "PUT":
+        data = request.get_json()
+        config.username = data.get("username", config.username)
+        config.platform = data.get("platform", config.platform)
+        config.label_name = data.get("label_name", config.label_name)
+        config.base_url = data.get("base_url", config.base_url)
+        if data.get("token"):  # only update if new token is provided
+            config.token = encrypt_token(data["token"])
+        if config.platform == "github":
+            if not validate_github_token(decrypt_token(config.token)):
+                db.session.rollback()
+                return jsonify({"message": "Invalid GitHub token"}), 400
+        elif config.platform == "gitlab":
+            if not validate_gitlab_token(decrypt_token(config.token), config.base_url):
+                db.session.rollback()
+                return jsonify({"message": "Invalid GitLab token"}), 400 
+        db.session.commit()
+        return jsonify({"message": "Config updated"}), 200
+
+@main.route("/api/settings/<int:config_id>/check", methods=["GET"])
+def check_token_validity(config_id):
+    config = GitSourceConfig.query.get_or_404(config_id)
+    token = decrypt_token(config.token)
+    if config.platform == "github":
+        if validate_github_token(token):
+            return jsonify({"message": "Valid", "platform": "github", "username": config.username})
+        else:
+            return jsonify({"message": "Invalid GitHub token"}), 400
+    elif config.platform == "gitlab":
+        if validate_gitlab_token(token, config.base_url):
+            return jsonify({"message": "Valid", "platform": "gitlab", "username": config.username})
+        else:
+            return jsonify({"message": "Invalid GitLab token"}), 400
+    else:
+        return jsonify({"message": "Unsupported platform"}), 400
 
 # ------------------------------
 # API: DefectDojo Config
