@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, Flask, send_file, send_from_directory
 from . import db
 from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan, ScanHashRecord, WebhookSecret
-from .utils import encrypt_token, decrypt_token, push_scan_job_to_queue, push_webhook_job_to_queue, validate_github_token, validate_gitlab_token
+from .utils import encrypt_token, decrypt_token, push_scan_job_to_queue, push_webhook_job_to_queue, validate_github_token, validate_gitlab_token, is_new_code_push
 
 from sqlalchemy import and_
 from datetime import datetime
@@ -640,6 +640,9 @@ def handle_webhook(platform, git_config_id):
     secret_entry = WebhookSecret.query.filter_by(platform=platform).first()
     if not secret_entry:
         return jsonify({"error": "No secret configured"}), 403
+    
+    if not is_new_code_push(raw_body):
+        return jsonify({"error": "Not a new code push"}), 200
 
     secret = decrypt_token(secret_entry.secret)
 
