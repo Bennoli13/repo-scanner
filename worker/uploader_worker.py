@@ -160,11 +160,6 @@ def process_upload_job(job):
                 logger.warning(f"❌ Could not find engagement_id for repo={repo_name}. Skipping upload.")
                 return
 
-        # 🧼 Skip if file is empty
-        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
-            logger.info(f"📭 Skipping upload — file is empty: {file_path}")
-            return
-
         # 🔍 Ignore filtering
         ignore_keywords = get_ignore_keywords(scanner)
         if scanner == "trufflehog":
@@ -177,6 +172,11 @@ def process_upload_job(job):
             if prev_hash == file_hash and prev_status == "success":
                 logger.info(f"⏩ Skipping upload — hash unchanged for engagement_id={engagement_id}")
                 return
+        
+        # 🧼 Skip if file is empty
+        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+            logger.info(f"📭 Skipping upload — file is empty: {file_path}")
+            return
 
         # 🚀 Upload to DefectDojo
         logger.info(f"⬆️ Uploading: {file_path} for engagement_id={engagement_id}")
