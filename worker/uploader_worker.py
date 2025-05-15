@@ -7,7 +7,8 @@ import sqlite3
 from datetime import datetime
 from cryptography.fernet import Fernet
 from scanner_module import upload_to_defectdojo
-import hash_manager
+from hash_manager import HashManager
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,8 +23,10 @@ RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
 RABBITMQ_PASS = os.getenv("RABBITMQ_PASS", "guest")
 FERNET_KEY = os.getenv("FERNET_KEY")
 UPLOAD_INTERVAL = 30  # seconds between uploads
+API_BASE = os.getenv("API_BASE", "http://web:5000") 
 
 fernet = Fernet(FERNET_KEY)
+hash_mgr = HashManager(api_base=API_BASE)
 
 def decrypt_token(token_encrypted: str) -> str:
     return fernet.decrypt(token_encrypted.encode()).decode()
@@ -138,7 +141,7 @@ def process_upload_job(job):
         if scanner == "trufflehog":
             process_vulnerability_ignore_rules_trufflehog(file_path, ignore_keywords)
 
-        file_hash = hash_manager.compute_file_hash(scanner, file_path)
+        file_hash = hash_mgr.compute_file_hash(scanner, file_path)
         if not file_hash:
             logger.warning(f"⚠️ Could not compute hash. Proceeding with upload.")
         else:
