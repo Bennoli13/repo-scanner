@@ -95,3 +95,22 @@ services:
       - web
     restart: always
     volumes: []  # ⛔️ prevent source code override
+  
+  uploader-worker:
+    build: .
+    container_name: scanner-uploader-worker
+    environment:
+      - FERNET_KEY=${FERNET_KEY}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASS=${RABBITMQ_PASS}
+      - SQLITE_PATH=/app/instance/scanner.db
+    command: ["python", "worker/uploader_worker.py"]
+    depends_on:
+      - web
+      - rabbitmq
+    restart: always
+    volumes:
+      - .:/app
+
+

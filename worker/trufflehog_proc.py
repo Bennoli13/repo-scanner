@@ -106,6 +106,7 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
             chunks = split_trufflehog_findings(file_path, max_findings=50)
             uploaded = False
             
+            ''' ignore upload to dojo
             if not chunks:
                 logger.info("🛑 No findings to upload after minimizing.")
             else:
@@ -123,14 +124,17 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
                     except Exception as e:
                         logger.warning(f"⚠️ Failed to remove temp file {chunk_file}: {e}")
             logger.info(f"Upload status: {uploaded}")
+            '''
+            uploaded = True #Delete this line to enable upload to dojo
         else:
             logger.info("Skipping upload to DefectDojo (either skipped or already uploaded).")
             uploaded = False
-
+        
+        
         if uploaded:
             logger.info(f"✅ Uploaded findings for branch {branch}.")
             hash_mgr.record("trufflehog", repo_name, branch, file_path)
-            scanner_module.upload_to_flask_app(file_path, unique_id, "trufflehog", repo_name, API_BASE)
+            scanner_module.upload_to_flask_app(file_path, unique_id, "trufflehog", repo_name, API_BASE, engagement_id, tags=[repo_name, branch, "trufflehog"], scan_type="Trufflehog Scan")
         else:
             logger.info(f"❌ Failed to upload findings for branch {branch}.")
     else:

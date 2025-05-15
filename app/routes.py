@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, Flask, send_file, send_from_directory
 from . import db
-from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan, ScanHashRecord, WebhookSecret
-from .utils import encrypt_token, decrypt_token, push_scan_job_to_queue, push_webhook_job_to_queue, validate_github_token, validate_gitlab_token, is_new_code_push
+from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan, ScanHashRecord, WebhookSecret, VulnerabilityIgnoreRule
+from .utils import encrypt_token, decrypt_token, push_scan_job_to_queue, push_webhook_job_to_queue, push_uploader_job_to_queue, validate_github_token, validate_gitlab_token, is_new_code_push
 
 from sqlalchemy import and_
 from datetime import datetime
@@ -397,6 +397,9 @@ def handle_file_upload():
     repo = request.form.get("repo_name")
     date_str = datetime.utcnow()
     unique_id = request.form.get("unique_id")
+    engagement_id = request.form.get("engagement_id")
+    tags = request.form.get("tags")
+    scan_type = request.form.get("scan_type")
 
     if not file or not scanner or not repo:
         return jsonify({"error": "Missing required parameters."}), 400
@@ -411,7 +414,24 @@ def handle_file_upload():
     file_path = os.path.join(folder_path, secure_filename(filename))
     file.save(file_path)
 
-    return jsonify({"message": "File uploaded successfully.", "path": file_path}), 200
+    # 👇 Push job to uploader queue
+    job_data = {
+        "scanner": scanner,
+        "repo": repo,
+        "file_path": file_path,
+        "engagement_id": engagement_id,
+        "tags": tags,
+        "scan_type": scan_type,
+        "unique_id": unique_id,
+        "uploaded_at": date_str
+    }
+    try:
+        push_uploader_job_to_queue(job_data)
+    except Exception as e:
+        return jsonify({"error": f"File saved, but failed to queue upload: {e}"}), 500
+
+    return jsonify({"message": "File uploaded and job queued successfully.", "path": file_path}), 200
+
 
 @main.route("/api/download/<scanner>", methods=["GET"])
 def download_by_scanner(scanner):
@@ -767,3 +787,35 @@ def import_hashes():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Hash import failed: {e}"}), 500
+    
+# ------------------------------
+# API: Ignore Rules
+# ------------------------------
+@main.route("/api/ignore-rules", methods=["GET"])
+def list_ignore_rules():
+    rules = VulnerabilityIgnoreRule.query.all()
+    return jsonify([r.to_dict() for r in rules]), 200
+
+@main.route("/api/ignore-rules", methods=["POST"])
+def add_ignore_rule():
+    data = request.get_json()
+    scanner = data.get("scanner")
+    keyword = data.get("keyword")
+
+    if not scanner or not keyword:
+        return jsonify({"error": "scanner and keyword are required"}), 400
+
+    rule = VulnerabilityIgnoreRule(scanner=scanner, keyword=keyword)
+    db.session.add(rule)
+    db.session.commit()
+    return jsonify(rule.to_dict()), 201
+
+@main.route("/api/ignore-rules/<int:rule_id>", methods=["DELETE"])
+def delete_ignore_rule(rule_id):
+    rule = VulnerabilityIgnoreRule.query.get(rule_id)
+    if not rule:
+        return jsonify({"error": "Rule not found"}), 404
+
+    db.session.delete(rule)
+    db.session.commit()
+    return jsonify({"message": f"Rule {rule_id} deleted"}), 200

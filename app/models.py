@@ -107,3 +107,31 @@ class WebhookSecret(db.Model):
     
     def to_dict(self):
         return {column.name: getattr(self, column.name) for column in self.__table__.columns}
+
+class UploadHistory(db.Model):
+    __tablename__ = "upload_history"
+
+    id = db.Column(db.Integer, primary_key=True)
+    engagement_id = db.Column(db.Integer, nullable=False)
+    file_hash = db.Column(db.String(128), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    upload_status = db.Column(
+        db.String(10),
+        nullable=False,
+        default="fail"
+    )  # either 'success' or 'fail'
+
+    def to_dict(self):
+        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
+    
+class VulnerabilityIgnoreRule(db.Model):
+    __tablename__ = "vulnerability_ignore_rules"
+
+    id = db.Column(db.Integer, primary_key=True)
+    scanner = db.Column(db.String(50), nullable=False)  # e.g., "trufflehog"
+    keyword = db.Column(db.String(255), nullable=False)  # e.g., Detector Name or ID
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
+
