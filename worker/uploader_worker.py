@@ -137,34 +137,6 @@ def process_upload_job(job):
 
         dojo_url, dojo_token = load_defectdojo_config()
 
-        # 🔍 Try to fetch engagement_id by repo name if missing
-        if not engagement_id:
-            repo_name = repo
-            conn = sqlite3.connect(SQLITE_PATH)
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT id FROM scanner_job 
-                WHERE repo_id IN (
-                    SELECT id FROM repository WHERE name = ?
-                )
-                AND engagement_id IS NOT NULL
-                ORDER BY updated_at DESC
-                LIMIT 1
-            """, (repo_name,))
-            row = cursor.fetchone()
-            conn.close()
-            if row:
-                engagement_id = row[0]
-                logger.info(f"🔁 Retrieved engagement_id={engagement_id} from repo={repo_name}")
-            else:
-                logger.warning(f"❌ Could not find engagement_id for repo={repo_name}. Skipping upload.")
-                return
-
-        # 🧼 Skip if file is empty
-        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
-            logger.info(f"📭 Skipping upload — file is empty: {file_path}")
-            return
-
         # 🔍 Ignore filtering
         ignore_keywords = get_ignore_keywords(scanner)
         if scanner == "trufflehog":
@@ -177,6 +149,11 @@ def process_upload_job(job):
             if prev_hash == file_hash and prev_status == "success":
                 logger.info(f"⏩ Skipping upload — hash unchanged for engagement_id={engagement_id}")
                 return
+        
+        # 🧼 Skip if file is empty
+        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+            logger.info(f"📭 Skipping upload — file is empty: {file_path}")
+            return
 
         # 🚀 Upload to DefectDojo
         logger.info(f"⬆️ Uploading: {file_path} for engagement_id={engagement_id}")

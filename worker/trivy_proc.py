@@ -159,7 +159,7 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
     if uploaded:
         logger.info(f"✅ Uploaded findings for branch {branch}.")
         hash_mgr.record("trivy", repo_name, branch, file_path)
-        scanner_module.upload_to_flask_app(file_path, unique_id, "trivy", repo_name, API_BASE)
+        scanner_module.upload_to_flask_app(file_path, unique_id, "trivy", repo_name, API_BASE, engagement_id, tags=[repo_name, branch, "trufflehog"], scan_type="Trivy Scan")
     else:
         logger.info(f"❌ Failed to upload findings for branch {branch}.")
 
@@ -212,11 +212,7 @@ def main_webhook(data):
     skip_dojo = dojo_url == ""
     full_url = data.get("auth_url", repo_url)
 
-    if not skip_dojo:
-        engagement_id = scanner_module.defect_dojo_prep(dojo_token, dojo_url, label_name, repo_name)
-    else:
-        engagement_id = None
-        logger.info("Skipping DefectDojo setup (no token/url).")
+    engagement_id = scanner_module.defect_dojo_prep(dojo_token, dojo_url, label_name, repo_name)
         
     #log the label_name, egangement_id, and repo_name
     logger.info(f"Label Name: {label_name}, Engagement ID: {engagement_id}, Repo Name: {repo_name}")
