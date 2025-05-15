@@ -197,11 +197,7 @@ def main_webhook(data):
     skip_dojo = dojo_url == ""
     full_url = data.get("auth_url", repo_url)
 
-    if not skip_dojo:
-        engagement_id = scanner_module.defect_dojo_prep(dojo_token, dojo_url, label_name, repo_name)
-    else:
-        engagement_id = None
-        logger.info("Skipping DefectDojo setup (no token/url).")
+    engagement_id = scanner_module.defect_dojo_prep(dojo_token, dojo_url, label_name, repo_name)
     
     #log the label_name, egangement_id, and repo_name
     logger.info(f"Label Name: {label_name}, Engagement ID: {engagement_id}, Repo Name: {repo_name}")

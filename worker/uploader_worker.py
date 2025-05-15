@@ -137,29 +137,6 @@ def process_upload_job(job):
 
         dojo_url, dojo_token = load_defectdojo_config()
 
-        # 🔍 Try to fetch engagement_id by repo name if missing
-        if not engagement_id:
-            repo_name = repo
-            conn = sqlite3.connect(SQLITE_PATH)
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT id FROM scanner_job 
-                WHERE repo_id IN (
-                    SELECT id FROM repository WHERE name = ?
-                )
-                AND engagement_id IS NOT NULL
-                ORDER BY updated_at DESC
-                LIMIT 1
-            """, (repo_name,))
-            row = cursor.fetchone()
-            conn.close()
-            if row:
-                engagement_id = row[0]
-                logger.info(f"🔁 Retrieved engagement_id={engagement_id} from repo={repo_name}")
-            else:
-                logger.warning(f"❌ Could not find engagement_id for repo={repo_name}. Skipping upload.")
-                return
-
         # 🔍 Ignore filtering
         ignore_keywords = get_ignore_keywords(scanner)
         if scanner == "trufflehog":
