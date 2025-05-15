@@ -132,6 +132,7 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
 
     uploaded = False
     if not skip_dojo and not already_uploaded:
+        '''
         chunks = split_trivy_findings(file_path, max_findings=50)
 
         if not chunks:
@@ -150,6 +151,8 @@ def scan_and_upload_branch(repo_url, branch, repo_name, dojo_token, dojo_url, en
                     logger.info(f"🧹 Removed temp file: {chunk_file}")
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to remove temp file {chunk_file}: {e}")
+        '''
+        uploaded = True #remove this line to enable upload
     else:
         logger.info("Skipping upload to DefectDojo (either skipped or already uploaded).")
 

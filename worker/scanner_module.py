@@ -137,7 +137,8 @@ def upload_to_defectdojo(token, dojo_url, engagement_id, file_path, tags, scan_t
     files = {"file": open(file_path, "rb")}
     #check if tags is a list
     if isinstance(tags, list):
-        tag_ = tags[0]
+        #combine tags into a comma-separated string
+        tag_ = ",".join(tags)
     else:
         tag_ = tags
     product_name, engagement_name = get_product_and_engagement_name(dojo_url, token, engagement_id)
@@ -182,7 +183,7 @@ def upload_to_defectdojo(token, dojo_url, engagement_id, file_path, tags, scan_t
     return False
 
 
-def upload_to_flask_app(file_path, unique_id, scanner_name, repo_name, flask_api_url):
+def upload_to_flask_app(file_path, unique_id, scanner_name, repo_name, flask_api_url, engagement_id=None, tags=None, scan_type=None):
     try:
         with open(file_path, "rb") as f:
             files = {"file": f}
@@ -190,6 +191,9 @@ def upload_to_flask_app(file_path, unique_id, scanner_name, repo_name, flask_api
                 "scanner_name": scanner_name,
                 "repo_name": repo_name,
                 "unique_id": unique_id,
+                "engagement_id": engagement_id,
+                "tags": tags,
+                "scan_type": scan_type,
             }
             response = requests.post(f"{flask_api_url}/api/upload", files=files, data=data)
         if response.ok:

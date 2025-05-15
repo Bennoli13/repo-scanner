@@ -2,6 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: repo-scanner-web
+  labels:
+    app: repo-scanner
+    component: web
 spec:
   replicas: {{ .Values.replicaCount.web }}
   selector:
@@ -41,6 +44,24 @@ spec:
               mountPath: /app/instance
             - name: data-volume
               mountPath: /app/files
+
+        - name: uploader
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - python
+            - worker/uploader_worker.py
+          envFrom:
+            - secretRef:
+                name: repo-scanner-secret
+            - configMapRef:
+                name: repo-scanner-env
+          volumeMounts:
+            - name: data-volume
+              mountPath: /app/instance
+            - name: data-volume
+              mountPath: /app/files
+
       volumes:
         - name: data-volume
           persistentVolumeClaim:
