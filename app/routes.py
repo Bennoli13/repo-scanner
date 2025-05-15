@@ -395,7 +395,7 @@ def handle_file_upload():
     file = request.files.get("file")
     scanner = request.form.get("scanner_name")
     repo = request.form.get("repo_name")
-    date_str = datetime.utcnow()
+    date_str = datetime.utcnow().isoformat()
     unique_id = request.form.get("unique_id")
     engagement_id = request.form.get("engagement_id")
     tags = request.form.get("tags")
