@@ -8,3 +8,4 @@ python-dotenv
 requests 
 APScheduler
 python-dateutil
+Flask-Migrate
