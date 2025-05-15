@@ -655,7 +655,7 @@ def verify_github_signature(secret, payload, signature_header):
 
 @main.route("/webhook/<platform>/<int:git_config_id>", methods=["POST"])
 def handle_webhook(platform, git_config_id):
-    raw_body = request.data
+    raw_body = request.get_json()
 
     secret_entry = WebhookSecret.query.filter_by(platform=platform).first()
     if not secret_entry:
