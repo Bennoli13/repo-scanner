@@ -655,13 +655,14 @@ def verify_github_signature(secret, payload, signature_header):
 
 @main.route("/webhook/<platform>/<int:git_config_id>", methods=["POST"])
 def handle_webhook(platform, git_config_id):
-    raw_body = request.get_json()
+    raw_body = request.data
+    json_body = request.get_json()
 
     secret_entry = WebhookSecret.query.filter_by(platform=platform).first()
     if not secret_entry:
         return jsonify({"error": "No secret configured"}), 403
     
-    if not is_new_code_push(raw_body):
+    if not is_new_code_push(json_body):
         return jsonify({"error": "Not a new code push"}), 200
 
     secret = decrypt_token(secret_entry.secret)
@@ -672,7 +673,7 @@ def handle_webhook(platform, git_config_id):
         if not verify_github_signature(secret, raw_body, signature):
             return jsonify({"error": "Invalid signature"}), 403
 
-        payload = request.get_json()
+        payload = json_body
         repo_url = payload["repository"]["clone_url"]
         branch = payload["ref"].split("/")[-1]  # refs/heads/main
         commit_id = payload.get("after")
@@ -683,7 +684,7 @@ def handle_webhook(platform, git_config_id):
         if not hmac.compare_digest(token,secret):
             return jsonify({"error": "Invalid token"}), 403
 
-        payload = request.get_json()
+        payload = json_body
         repo_url = payload["project"]["http_url"]
         branch = payload["ref"].split("/")[-1]
         commit_id = payload.get("after")
