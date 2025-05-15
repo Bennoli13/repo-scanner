@@ -131,26 +131,55 @@ def process_upload_job(job):
         scanner = job["scanner"]
         repo = job["repo"]
         file_path = job["file_path"]
-        engagement_id = job["engagement_id"]
-        tags = job["tags"]
-        scan_type = job["scan_type"]
+        engagement_id = job.get("engagement_id")
+        tags = job.get("tags", [])
+        scan_type = job.get("scan_type", "Generic Scan")
 
         dojo_url, dojo_token = load_defectdojo_config()
-        
+
+        # 🔍 Try to fetch engagement_id by repo name if missing
+        if not engagement_id:
+            repo_name = repo
+            conn = sqlite3.connect(SQLITE_PATH)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id FROM scanner_job 
+                WHERE repo_id IN (
+                    SELECT id FROM repository WHERE name = ?
+                )
+                AND engagement_id IS NOT NULL
+                ORDER BY updated_at DESC
+                LIMIT 1
+            """, (repo_name,))
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                engagement_id = row[0]
+                logger.info(f"🔁 Retrieved engagement_id={engagement_id} from repo={repo_name}")
+            else:
+                logger.warning(f"❌ Could not find engagement_id for repo={repo_name}. Skipping upload.")
+                return
+
+        # 🧼 Skip if file is empty
+        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+            logger.info(f"📭 Skipping upload — file is empty: {file_path}")
+            return
+
+        # 🔍 Ignore filtering
         ignore_keywords = get_ignore_keywords(scanner)
         if scanner == "trufflehog":
             process_vulnerability_ignore_rules_trufflehog(file_path, ignore_keywords)
 
+        # 🧠 Hash check
         file_hash = hash_mgr.compute_file_hash(scanner, file_path)
-        if not file_hash:
-            logger.warning(f"⚠️ Could not compute hash. Proceeding with upload.")
-        else:
+        if file_hash:
             prev_hash, prev_status = get_last_upload_record(engagement_id)
             if prev_hash == file_hash and prev_status == "success":
-                logger.info(f"⏩ Skipping upload: hash identical to last successful one.")
+                logger.info(f"⏩ Skipping upload — hash unchanged for engagement_id={engagement_id}")
                 return
 
-        logger.info(f"⬆️ Uploading: {file_path} for engagement={engagement_id}")
+        # 🚀 Upload to DefectDojo
+        logger.info(f"⬆️ Uploading: {file_path} for engagement_id={engagement_id}")
         success = upload_to_defectdojo(
             token=dojo_token,
             dojo_url=dojo_url,
@@ -160,6 +189,7 @@ def process_upload_job(job):
             scan_type=scan_type
         )
 
+        # 📝 Record hash result
         status = "success" if success else "fail"
         if file_hash:
             save_upload_record(engagement_id, file_hash, status)
