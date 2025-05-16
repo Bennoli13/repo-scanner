@@ -153,6 +153,11 @@ def process_upload_job(job):
         scan_type = job.get("scan_type", "Generic Scan")
 
         dojo_url, dojo_token = load_defectdojo_config()
+        
+        #ignore upload if engagement_id is None
+        if engagement_id is None:
+            logger.info(f"⏩ Skipping upload — engagement_id is None")
+            return
 
         # 🔍 Ignore filtering
         ignore_keywords = get_ignore_keywords(scanner, engagement_id)
