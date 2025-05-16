@@ -88,10 +88,27 @@ def load_defectdojo_config():
         logger.error(f"❌ Failed to load or decrypt DefectDojo config: {e}")
         raise
 
-def get_ignore_keywords(scanner):
+def get_ignore_keywords(scanner, engagement_id):
+    """
+    Return ignore keywords for both global rules (engagement IS NULL)
+    and rules specific to the given engagement_id.
+    """
+    if engagement_id is None:
+        # Can't determine engagement-specific rules
+        return []
+
     conn = sqlite3.connect(SQLITE_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT keyword FROM vulnerability_ignore_rules WHERE scanner = ?", (scanner,))
+
+    cursor.execute(
+        """
+        SELECT keyword FROM vulnerability_ignore_rules
+        WHERE scanner = ?
+          AND (engagement IS NULL OR engagement = ?)
+        """,
+        (scanner, engagement_id)
+    )
+
     rows = cursor.fetchall()
     conn.close()
     return [r[0] for r in rows]
@@ -138,7 +155,7 @@ def process_upload_job(job):
         dojo_url, dojo_token = load_defectdojo_config()
 
         # 🔍 Ignore filtering
-        ignore_keywords = get_ignore_keywords(scanner)
+        ignore_keywords = get_ignore_keywords(scanner, engagement_id)
         if scanner == "trufflehog":
             process_vulnerability_ignore_rules_trufflehog(file_path, ignore_keywords)
         

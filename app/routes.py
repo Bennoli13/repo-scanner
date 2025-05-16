@@ -802,11 +802,22 @@ def add_ignore_rule():
     data = request.get_json()
     scanner = data.get("scanner")
     keyword = data.get("keyword")
+    engagement = data.get("engagement")  # Optional; can be null or int
 
     if not scanner or not keyword:
         return jsonify({"error": "scanner and keyword are required"}), 400
 
-    rule = VulnerabilityIgnoreRule(scanner=scanner, keyword=keyword)
+    # Normalize engagement to None if not provided
+    try:
+        engagement_id = int(engagement) if engagement is not None else None
+    except ValueError:
+        return jsonify({"error": "engagement must be an integer or null"}), 400
+
+    rule = VulnerabilityIgnoreRule(
+        scanner=scanner,
+        keyword=keyword,
+        engagement=engagement_id
+    )
     db.session.add(rule)
     db.session.commit()
     return jsonify(rule.to_dict()), 201
