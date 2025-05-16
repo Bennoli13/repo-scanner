@@ -143,6 +143,47 @@ def process_vulnerability_ignore_rules_trufflehog(file_path, ignore_keywords):
     except Exception as e:
         logger.error(f"❌ Failed to apply ignore rules: {e}")
 
+def file_contains_trivy_findings(file_path):
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            # Trivy JSON format: {"Results": [{...}]}
+            for result in data.get("Results", []):
+                if result.get("Vulnerabilities"):
+                    return True
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to inspect {file_path}: {e}")
+    return False
+
+def file_contains_trufflehog_findings(file_path):
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    if "DetectorName" in data:
+                        return True  # At least one finding found
+                except json.JSONDecodeError:
+                    continue
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to inspect {file_path}: {e}")
+    return False
+
+def file_contains_findings(file_path, scanner):
+    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+        return False
+
+    if scanner == "trufflehog":
+        return file_contains_trufflehog_findings(file_path)
+    elif scanner == "trivy":
+        return file_contains_trivy_findings(file_path)
+    else:
+        logger.warning(f"⚠️ Unknown scanner type: {scanner}")
+        return False
+
 def process_upload_job(job):
     try:
         scanner = job["scanner"]
@@ -165,8 +206,8 @@ def process_upload_job(job):
             process_vulnerability_ignore_rules_trufflehog(file_path, ignore_keywords)
         
         # 🧼 Skip if file is empty
-        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
-            logger.info(f"📭 Skipping upload — file is empty: {file_path}")
+        if not file_contains_findings(file_path, scanner):
+            logger.info(f"📭 Skipping upload — no findings for {scanner}: {file_path}")
             return
 
         # 🧠 Hash check
