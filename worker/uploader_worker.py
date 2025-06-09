@@ -196,6 +196,7 @@ def load_defectdojo_config():
         return dojo_url, dojo_token
     except Exception as e:
         logger.error(f"❌ Failed to load or decrypt DefectDojo config: {e}")
+        logger.info(f"SQLITE_PATH: {SQLITE_PATH}")
         raise
 
 def get_ignore_keywords(scanner, engagement_id):
