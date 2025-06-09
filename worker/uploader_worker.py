@@ -8,7 +8,7 @@ from datetime import datetime
 from cryptography.fernet import Fernet
 from scanner_module import upload_to_defectdojo
 from hash_manager import HashManager
-
+import requests
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,12 +30,6 @@ hash_mgr = HashManager(api_base=API_BASE)
 
 
 ####NOTIFICATION####
-import json
-import sqlite3
-import requests
-
-SQLITE_PATH = "/app/db.sqlite3"
-
 class SlackNotifier:
     def __init__(self, scanner, filepath):
         self.scanner = scanner
