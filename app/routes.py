@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, Flask, send_file, send_from_directory
 from . import db
-from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan, ScanHashRecord, WebhookSecret, VulnerabilityIgnoreRule
+from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan, ScanHashRecord, WebhookSecret, VulnerabilityIgnoreRule, SlackWebhook
 from .utils import encrypt_token, decrypt_token, push_scan_job_to_queue, push_webhook_job_to_queue, push_uploader_job_to_queue, validate_github_token, validate_gitlab_token, is_new_code_push
 
 from sqlalchemy import and_
@@ -471,6 +471,23 @@ def clear_all(scanner):
             shutil.rmtree(folder_path)
             os.makedirs(folder_path)
     return jsonify({"message": "All uploaded files cleared."}), 200
+
+# ------------------------------
+# API: Notification
+# ------------------------------
+@main.route("/api/slackwebhook", methods=["POST"])
+def add_slack_webhook():
+    data = request.get_json()
+    webhook = SlackWebhook(
+        name=data["name"],
+        url=data["url"],
+        is_active=data.get("is_active", True),
+        notify_trivy=data.get("notify_trivy", False),
+        notify_trufflehog=data.get("notify_trufflehog", False)
+    )
+    db.session.merge(webhook)
+    db.session.commit()
+    return jsonify({"message": "Webhook saved."}), 200
 
 # ------------------------------
 # API: Scheduler

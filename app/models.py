@@ -136,4 +136,10 @@ class VulnerabilityIgnoreRule(db.Model):
     def to_dict(self):
         return {column.name: getattr(self, column.name) for column in self.__table__.columns}
 
-
+class SlackWebhook(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), unique=True, nullable=False)
+    url = db.Column(db.String(512), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    notify_trufflehog = db.Column(db.Boolean, default=False)
+    notify_trivy = db.Column(db.Boolean, default=False)

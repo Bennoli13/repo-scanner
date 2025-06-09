@@ -99,6 +99,31 @@
   <button class="btn btn-success">Save</button>
 </form>
 
+<!-- Notification Config -->
+<h4 class="mt-5">Slack Webhook Config</h4>
+<form id="slackWebhookForm">
+  <div class="mb-3">
+    <input type="text" class="form-control" id="slack_name" placeholder="Webhook Name">
+  </div>
+  <div class="mb-3 position-relative">
+    <input type="password" class="form-control" id="slack_url" placeholder="Slack Webhook URL">
+    <button type="button" class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0" style="margin: 5px;" onclick="toggleSlackUrl()">👁️</button>
+  </div>
+  <div class="mb-3 form-check">
+    <input type="checkbox" class="form-check-input" id="slack_active">
+    <label class="form-check-label" for="slack_active">Active</label>
+  </div>
+  <div class="mb-3 form-check">
+    <input type="checkbox" class="form-check-input" id="slack_trivy">
+    <label class="form-check-label" for="slack_trivy">Notify on Trivy Findings</label>
+  </div>
+  <div class="mb-3 form-check">
+    <input type="checkbox" class="form-check-input" id="slack_trufflehog">
+    <label class="form-check-label" for="slack_trufflehog">Notify on TruffleHog Findings</label>
+  </div>
+  <button class="btn btn-success" type="submit">Save</button>
+</form>
+
 
 <!-- Scheduler Config -->
 <hr>
@@ -438,5 +463,25 @@
   }
   document.addEventListener("DOMContentLoaded", loadWebhookSecrets);
   
+</script>
+<script>
+document.getElementById("slackWebhookForm").addEventListener("submit", async function(e) {
+  e.preventDefault();
+  const data = {
+    name: document.getElementById("slack_name").value,
+    url: document.getElementById("slack_url").value,
+    is_active: document.getElementById("slack_active").checked,
+    notify_trivy: document.getElementById("slack_trivy").checked,
+    notify_trufflehog: document.getElementById("slack_trufflehog").checked,
+  };
+
+  await fetch("/api/slackwebhook", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+
+  alert("Saved!");
+});
 </script>
 {% endblock %}

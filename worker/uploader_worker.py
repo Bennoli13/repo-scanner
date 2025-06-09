@@ -28,6 +28,116 @@ API_BASE = os.getenv("API_BASE", "http://web:5000")
 fernet = Fernet(FERNET_KEY)
 hash_mgr = HashManager(api_base=API_BASE)
 
+
+####NOTIFICATION####
+import json
+import sqlite3
+import requests
+
+SQLITE_PATH = "/app/db.sqlite3"
+
+class SlackNotifier:
+    def __init__(self, scanner, filepath):
+        self.scanner = scanner
+        self.filepath = filepath
+        self.webhooks = self._load_webhooks()
+        self.findings = self._load_findings()
+
+    def _load_webhooks(self):
+        conn = sqlite3.connect(SQLITE_PATH)
+        cursor = conn.cursor()
+        query = """
+            SELECT name, url FROM slack_webhook
+            WHERE is_active = 1 AND ({scanner_field} = 1)
+        """.format(scanner_field="notify_trivy" if self.scanner == "trivy" else "notify_trufflehog")
+        cursor.execute(query)
+        results = cursor.fetchall()
+        conn.close()
+        return results
+
+    def _load_findings(self):
+        try:
+            with open(self.filepath, "r", encoding="utf-8") as f:
+                content = f.read()
+            if self.scanner == "trivy":
+                return json.loads(content)
+            elif self.scanner == "trufflehog":
+                return [json.loads(line) for line in content.strip().splitlines()]
+            else:
+                return []
+        except Exception as e:
+            print(f"[SlackNotifier] ❌ Failed to read findings: {e}")
+            return []
+
+    def _format_message(self, item):
+        if self.scanner == "trivy":
+            return self._format_trivy(item)
+        elif self.scanner == "trufflehog":
+            return self._format_trufflehog(item)
+        return None
+
+    def _format_trivy(self, data):
+        def severity_emoji(sev):
+            return {
+                "CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🔵", "UNKNOWN": "⚪"
+            }.get(sev.upper(), "⚪")
+
+        def truncate(text, limit=100):
+            return text if len(text) <= limit else text[:limit].rstrip() + "..."
+
+        msg_parts = [f"*🔍 Trivy Finding*\nTarget: `{data.get('Target', 'Unknown')}`"]
+
+        for category, icon in [
+            ("Vulnerabilities", "🛡️"),
+            ("Misconfigurations", "⚠️"),
+            ("Secrets", "🔑"),
+            ("Licenses", "📄")
+        ]:
+            if category in data:
+                msg_parts.append(f"\n*{icon} {category}:*")
+                for item in data[category]:
+                    if category == "Vulnerabilities":
+                        emoji = severity_emoji(item.get("Severity", "UNKNOWN"))
+                        title = truncate(item.get("Title", item.get("VulnerabilityID", "")))
+                        msg_parts.append(f"- {emoji} *{item['VulnerabilityID']}* in `{item.get('PkgName', 'unknown')}`: {title}")
+                    elif category == "Misconfigurations":
+                        emoji = severity_emoji(item.get("Severity", "UNKNOWN"))
+                        title = truncate(item.get("Title", item.get("ID", "")))
+                        msg_parts.append(f"- {emoji} *{item['ID']}*: {title}")
+                    elif category == "Secrets":
+                        msg_parts.append(f"- *{item.get('RuleID', 'Unknown')}*: {truncate(item.get('Title', 'Secret found'))}")
+                    elif category == "Licenses":
+                        msg_parts.append(f"- `{item.get('PkgName', 'unknown')}` uses license: *{item.get('License', 'Unknown')}*")
+
+        return "\n".join(msg_parts) if len(msg_parts) > 1 else None
+
+    def _format_trufflehog(self, data):
+        try:
+            commit = data["SourceMetadata"]["Data"]["Git"]["commit"]
+            repo = data["SourceMetadata"]["Data"]["Git"]["repository"]
+            raw = data.get("Raw", "[REDACTED]")
+            detector = data.get("DetectorName", "Unknown")
+            return f"*🐷 TruffleHog Finding*\nRepo: `{repo}`\nCommit: `{commit}`\nDetector: *{detector}*\nSecret: `{raw[:100]}...`"
+        except Exception as e:
+            return f"*🐷 TruffleHog Finding*\n(Parsing error: {e})"
+
+    def send_notifications(self):
+        if not self.webhooks:
+            print("[SlackNotifier] ⚠️ No active webhooks configured.")
+            return
+
+        for finding in self.findings:
+            msg = self._format_message(finding)
+            if not msg:
+                continue
+
+            for name, url in self.webhooks:
+                try:
+                    requests.post(url, json={"text": msg})
+                except Exception as e:
+                    print(f"[SlackNotifier] ❌ Failed to send to '{name}': {e}")
+############
+
 def decrypt_token(token_encrypted: str) -> str:
     return fernet.decrypt(token_encrypted.encode()).decode()
 
@@ -236,6 +346,8 @@ def process_upload_job(job):
 
         if success:
             logger.info(f"✅ Upload success: {file_path}")
+            notifier = SlackNotifier(scanner, file_path)
+            notifier.send_notifications()
         else:
             logger.warning(f"⚠️ Upload failed: {file_path}")
 
