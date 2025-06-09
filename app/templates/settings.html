@@ -124,6 +124,11 @@
   <button class="btn btn-success" type="submit">Save</button>
 </form>
 
+<h4 class="mt-5">Slack Webhook Configs</h4>
+<div id="slackWebhookList" class="mb-3">
+  <!-- JS will insert items here -->
+</div>
+
 
 <!-- Scheduler Config -->
 <hr>
@@ -483,5 +488,66 @@ document.getElementById("slackWebhookForm").addEventListener("submit", async fun
 
   alert("Saved!");
 });
+</script>
+<script>
+async function loadSlackWebhooks() {
+  const resp = await fetch("/api/slackwebhook/all");
+  const data = await resp.json();
+
+  const container = document.getElementById("slackWebhookList");
+  container.innerHTML = "";
+
+  data.forEach(item => {
+    const row = document.createElement("div");
+    row.className = "border p-2 mb-2 rounded";
+
+    const info = document.createElement("div");
+    info.innerHTML = `
+      <strong>${item.name}</strong> | Webhook URL: <code>${item.url}</code><br>
+      Trivy: ${item.notify_trivy ? "✅" : "❌"} |
+      TruffleHog: ${item.notify_trufflehog ? "✅" : "❌"} |
+      Active: ${item.is_active ? "✅" : "❌"}
+    `;
+
+    const buttons = document.createElement("div");
+    buttons.className = "mt-2";
+
+    // Toggle activation
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className = "btn btn-sm btn-warning me-2";
+    toggleBtn.innerText = item.is_active ? "Deactivate" : "Activate";
+    toggleBtn.onclick = async () => {
+      await fetch(`/api/slackwebhook/${item.id}/toggle`, { method: "POST" });
+      loadSlackWebhooks();
+    };
+
+    // Edit webhook
+    const editBtn = document.createElement("button");
+    editBtn.className = "btn btn-sm btn-primary me-2";
+    editBtn.innerText = "Edit";
+    editBtn.onclick = () => {
+      // You can implement modal-based editing here
+      alert("Editing not yet implemented.");
+    };
+
+    // Delete webhook
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "btn btn-sm btn-danger";
+    deleteBtn.innerText = "Delete";
+    deleteBtn.onclick = async () => {
+      if (confirm("Delete this webhook?")) {
+        await fetch(`/api/slackwebhook/${item.id}`, { method: "DELETE" });
+        loadSlackWebhooks();
+      }
+    };
+
+    buttons.append(toggleBtn, editBtn, deleteBtn);
+    row.append(info, buttons);
+    container.appendChild(row);
+  });
+}
+
+// Auto-load
+loadSlackWebhooks();
 </script>
 {% endblock %}

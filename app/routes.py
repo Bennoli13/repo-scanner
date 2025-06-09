@@ -489,6 +489,38 @@ def add_slack_webhook():
     db.session.commit()
     return jsonify({"message": "Webhook saved."}), 200
 
+@main.route("/api/slackwebhook/all", methods=["GET"])
+def list_slack_webhooks():
+    rows = db.session.query(SlackWebhook).all()
+    return jsonify([
+        {
+            "id": r.id,
+            "name": r.name,
+            "url": r.url,
+            "is_active": r.is_active,
+            "notify_trivy": r.notify_trivy,
+            "notify_trufflehog": r.notify_trufflehog
+        } for r in rows
+    ])
+
+@main.route("/api/slackwebhook/<int:id>/toggle", methods=["POST"])
+def toggle_slackwebhook(id):
+    row = SlackWebhook.query.get(id)
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    row.is_active = not row.is_active
+    db.session.commit()
+    return jsonify({"status": "toggled"})
+
+@main.route("/api/slackwebhook/<int:id>", methods=["DELETE"])
+def delete_slackwebhook(id):
+    row = SlackWebhook.query.get(id)
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    db.session.delete(row)
+    db.session.commit()
+    return jsonify({"status": "deleted"})
+
 # ------------------------------
 # API: Scheduler
 # ------------------------------
