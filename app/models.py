@@ -143,3 +143,13 @@ class SlackWebhook(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     notify_trufflehog = db.Column(db.Boolean, default=False)
     notify_trivy = db.Column(db.Boolean, default=False)
+    
+class TrufflehogSecret(db.Model):
+    __tablename__ = "trufflehog_secrets"
+
+    id = db.Column(db.Integer, primary_key=True)
+    secret_hash = db.Column(db.String(512), unique=True, index=True, nullable=False)
+    secret = db.Column(db.Text, nullable=False)
+    repos = db.Column(db.JSON, default=list)  # Store repo list as JSON array
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.ateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
