@@ -9,6 +9,7 @@ from cryptography.fernet import Fernet
 from scanner_module import upload_to_defectdojo
 from hash_manager import HashManager
 import requests
+import hashlib
 
 logging.basicConfig(
     level=logging.INFO,
@@ -110,7 +111,40 @@ class SlackNotifier:
             commit = data["SourceMetadata"]["Data"]["Git"]["commit"]
             repo = data["SourceMetadata"]["Data"]["Git"]["repository"]
             raw = data.get("Raw", "[REDACTED]")
+            secret_hash = hashlib.sha256(raw.encode()).hexdigest()
             detector = data.get("DetectorName", "Unknown")
+            
+            conn = sqlite3.connect(SQLITE_PATH)
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT repos FROM trufflehog_secrets WHERE secret_hash = ?", (secret_hash,))
+            row = cursor.fetchone()
+            
+            if row is None:
+                # Not found, insert new
+                repos_json = json.dumps([repo])
+                cursor.execute("""
+                    INSERT INTO trufflehog_secrets (secret, secret_hash, repos)
+                    VALUES (?, ?, ?)
+                """, (row, secret_hash, repos_json))
+                conn.commit()
+                conn.close()
+            else:
+                existing_repos = json.loads(row[0])
+                if repo not in existing_repos:
+                    # New repo for existing secret, update repo list
+                    existing_repos.append(repo)
+                    cursor.execute("""
+                        UPDATE trufflehog_secrets
+                        SET repos = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE secret_hash = ?
+                    """, (json.dumps(existing_repos), secret_hash))
+                    conn.commit()
+                    conn.close()
+                else:
+                    # Already known secret + repo → skip notification
+                    conn.close()
+                    return None
             return f"*🐷 TruffleHog Finding*\nRepo: `{repo}`\nCommit: `{commit}`\nDetector: *{detector}*\nSecret: `{raw[:100]}...`"
         except Exception as e:
             return f"*🐷 TruffleHog Finding*\n(Parsing error: {e})"
