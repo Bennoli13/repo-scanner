@@ -152,4 +152,4 @@ class TrufflehogSecret(db.Model):
     secret = db.Column(db.Text, nullable=False)
     repos = db.Column(db.JSON, default=list)  # Store repo list as JSON array
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.ateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
