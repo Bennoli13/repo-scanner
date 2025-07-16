@@ -153,9 +153,9 @@ class SlackNotifier:
                     return None
             if now_utc - timestamp > timedelta(days=7):
                 return None  # Skip old secrets
-            return f"*🐷 TruffleHog Finding*\nRepo: `{repo}`\nCommit: `{commit}`\nDetector: *{detector}*\nSecretHash: `{secret_hash}`"
+            return f"*🐷 TruffleHog Secret Finding*\nRepo: `{repo}`\nCommit: `{commit}`\nTimestamp:`{timestamp_str}`\nDetector: *{detector}*\nSecretHash: `{secret_hash}`\n🔍 <https://scanner-defectdojo.k8s.uat.sportybet2.com/reveal/trufflehog|Reveal Secret>"
         except Exception as e:
-            return f"*🐷 TruffleHog Finding*\n(Parsing error: {e})"
+            return f"*🐷 TruffleHog Secret Finding*\n(Parsing error: {e})"
 
     def send_notifications(self):
         if not self.webhooks:

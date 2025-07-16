@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, Flask, send_file, send_from_directory
 from . import db
-from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan, ScanHashRecord, WebhookSecret, VulnerabilityIgnoreRule, SlackWebhook
+from .models import GitSourceConfig, DefectDojoConfig, Repository, ScannerJob, ScheduledScan, ScanHashRecord, WebhookSecret, VulnerabilityIgnoreRule, SlackWebhook, TrufflehogSecret
 from .utils import encrypt_token, decrypt_token, push_scan_job_to_queue, push_webhook_job_to_queue, push_uploader_job_to_queue, validate_github_token, validate_gitlab_token, is_new_code_push
 
 from sqlalchemy import and_
@@ -56,6 +56,10 @@ def view_results(scanner):
 
     files = [f for f in os.listdir(folder) if f.endswith(".json")]
     return render_template("result.html", scanner=scanner, files=files)
+
+@main.route('/reveal/trufflehog')
+def reveal_secret_ui():
+    return render_template("reveal_secret.html")
 
 # ------------------------------
 # Files: Download
@@ -880,3 +884,14 @@ def delete_ignore_rule(rule_id):
     db.session.delete(rule)
     db.session.commit()
     return jsonify({"message": f"Rule {rule_id} deleted"}), 200
+
+# ------------------------------
+# Reveal Trufflehog Secrets
+# ------------------------------
+@main.route("/api/trufflehog/secret/<secret_hash>")
+def get_trufflehog_secret(secret_hash):
+    secret_entry = TrufflehogSecret.query.filter_by(secret_hash=secret_hash).first()
+    if secret_entry:
+        return jsonify({"secret": secret_entry.secret})
+    else:
+        return jsonify({"error": "Secret not found"}), 404
