@@ -4,7 +4,7 @@ import os
 import time
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from cryptography.fernet import Fernet
 from scanner_module import upload_to_defectdojo
 from hash_manager import HashManager
@@ -108,11 +108,17 @@ class SlackNotifier:
 
     def _format_trufflehog(self, data):
         try:
-            commit = data["SourceMetadata"]["Data"]["Git"]["commit"]
-            repo = data["SourceMetadata"]["Data"]["Git"]["repository"]
+            git_data = data["SourceMetadata"]["Data"]["Git"]
+            commit = git_data["commit"]
+            repo =git_data["repository"]
             raw = data.get("Raw", "[REDACTED]")
             secret_hash = hashlib.sha256(raw.encode()).hexdigest()
             detector = data.get("DetectorName", "Unknown")
+            
+            # ⏱️ Parse and filter by timestamp (must be within 7 days)
+            timestamp_str = git_data.get("timestamp")  # "2024-11-19 07:36:45 +0000"
+            timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S %z")
+            now_utc = datetime.now(tz=timestamp.tzinfo)
             
             conn = sqlite3.connect(SQLITE_PATH)
             cursor = conn.cursor()
@@ -145,7 +151,9 @@ class SlackNotifier:
                     # Already known secret + repo → skip notification
                     conn.close()
                     return None
-            return f"*🐷 TruffleHog Finding*\nRepo: `{repo}`\nCommit: `{commit}`\nDetector: *{detector}*\nSecretHash: `{secret_hash}...`"
+            if now_utc - timestamp > timedelta(days=7):
+                return None  # Skip old secrets
+            return f"*🐷 TruffleHog Finding*\nRepo: `{repo}`\nCommit: `{commit}`\nDetector: *{detector}*\nSecretHash: `{secret_hash}`"
         except Exception as e:
             return f"*🐷 TruffleHog Finding*\n(Parsing error: {e})"
 
