@@ -126,7 +126,7 @@ class SlackNotifier:
                 cursor.execute("""
                     INSERT INTO trufflehog_secrets (secret, secret_hash, repos)
                     VALUES (?, ?, ?)
-                """, (row, secret_hash, repos_json))
+                """, (raw, secret_hash, repos_json))
                 conn.commit()
                 conn.close()
             else:
