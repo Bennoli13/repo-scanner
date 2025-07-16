@@ -145,7 +145,7 @@ class SlackNotifier:
                     # Already known secret + repo → skip notification
                     conn.close()
                     return None
-            return f"*🐷 TruffleHog Finding*\nRepo: `{repo}`\nCommit: `{commit}`\nDetector: *{detector}*\nSecret: `{raw[:100]}...`"
+            return f"*🐷 TruffleHog Finding*\nRepo: `{repo}`\nCommit: `{commit}`\nDetector: *{detector}*\nSecretHash: `{secret_hash}...`"
         except Exception as e:
             return f"*🐷 TruffleHog Finding*\n(Parsing error: {e})"
 
