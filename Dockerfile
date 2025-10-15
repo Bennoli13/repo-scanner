@@ -5,6 +5,7 @@ WORKDIR /app
 # Install system dependencies & Trivy
 RUN apt-get update && \
     apt-get upgrade -y && \
+    apt-get install -y wget curl git && \
     wget https://github.com/aquasecurity/trivy/releases/download/v0.18.3/trivy_0.18.3_Linux-64bit.deb && \
     dpkg -i trivy_0.18.3_Linux-64bit.deb && \
     trivy fs --download-db-only && \
