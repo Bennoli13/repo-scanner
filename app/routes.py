@@ -66,7 +66,7 @@ def reveal_secret_ui():
 # ------------------------------
 @main.route("/files/<scanner>/<filename>")
 def serve_uploaded_file(scanner, filename):
-    if scanner not in ["trufflehog", "trivy"]:
+    if scanner not in ["trufflehog", "trivy", "gitleaks"]:
         return "Invalid scanner", 404
     folder = os.path.join(FILE_UPLOAD_BASE, scanner)
     return send_from_directory(folder, filename, as_attachment=True)
@@ -439,7 +439,7 @@ def handle_file_upload():
 
 @main.route("/api/download/<scanner>", methods=["GET"])
 def download_by_scanner(scanner):
-    if scanner not in ["trufflehog", "trivy"]:
+    if scanner not in ["trufflehog", "trivy", "gitleaks"]:
         return jsonify({"error": "Unsupported scanner."}), 400
 
     folder_path = os.path.join(FILE_UPLOAD_BASE, scanner)
@@ -461,10 +461,10 @@ def download_by_scanner(scanner):
 
 @main.route("/api/clear/<scanner>", methods=["DELETE"])
 def clear_all(scanner):
-    if scanner not in ["trufflehog", "trivy", "all"]:
+    if scanner not in ["trufflehog", "trivy", "gitleaks", "all"]:
         return jsonify({"error": "Unsupported scanner."}), 400
     if scanner == "all":
-        for scanner in ["trufflehog", "trivy"]:
+        for scanner in ["trufflehog", "trivy", "gitleaks"]:
             folder_path = os.path.join(FILE_UPLOAD_BASE, scanner)
             if os.path.exists(folder_path):
                 shutil.rmtree(folder_path)
