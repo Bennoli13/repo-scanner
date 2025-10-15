@@ -57,9 +57,9 @@ def scan_repo(repo_url, branch, repo_name, output_file):
     # 4. Clean up
     shutil.rmtree(temp_dir)
 
-    if scan_result.returncode != 0:
-        logger.error(f"❌ Gitleaks scan failed for {repo_name}: {scan_result.stderr}")
-        return False, output_file
+    #if scan_result.returncode != 0:
+    #    logger.error(f"❌ Gitleaks scan failed for {repo_name}: {scan_result.stderr}")
+    #    return False, output_file
 
     logger.info(f"✅ Gitleaks scan complete: {output_file}")
     return True, output_file
