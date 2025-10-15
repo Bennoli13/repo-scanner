@@ -4,11 +4,9 @@ WORKDIR /app
 
 # Install system dependencies & Trivy
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    curl ca-certificates git wget gnupg lsb-release apt-transport-https && \
-    wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | apt-key add - && \
-    echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" > /etc/apt/sources.list.d/trivy.list && \
-    apt-get update && apt-get install -y trivy && \
+    apt-get upgrade -y && \
+    wget https://github.com/aquasecurity/trivy/releases/download/v0.18.3/trivy_0.18.3_Linux-64bit.deb && \
+    dpkg -i trivy_0.18.3_Linux-64bit.deb && \
     trivy fs --download-db-only && \
     trivy fs --download-java-db-only && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
