@@ -408,7 +408,7 @@ def handle_file_upload():
     if not file or not scanner or not repo:
         return jsonify({"error": "Missing required parameters."}), 400
 
-    if scanner not in ["trufflehog", "trivy"]:
+    if scanner not in ["trufflehog", "trivy", "gitleaks"]:
         return jsonify({"error": "Unsupported scanner."}), 400
 
     folder_path = os.path.join(FILE_UPLOAD_BASE, scanner)
