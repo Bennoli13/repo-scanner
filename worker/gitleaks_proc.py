@@ -49,7 +49,7 @@ def scan_repo(repo_url, branch, repo_name, output_file):
     # 3. Run Gitleaks scan in fs mode
     logger.info(f"🔍 Running Gitleaks scan on {repo_name} (branch: {branch})...")
     scan_cmd = [
-        "gitleaks", "detect", "--no-git", repo_path, "--report-path", output_file,
+        "gitleaks", "detect", repo_path, "--report-format", "json", "--report-path", output_file,
         "--config", "/app/worker/config/gitleaks.toml"
     ]
     scan_result = subprocess.run(scan_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)

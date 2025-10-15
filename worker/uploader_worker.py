@@ -32,9 +32,10 @@ hash_mgr = HashManager(api_base=API_BASE)
 
 ####NOTIFICATION####
 class SlackNotifier:
-    def __init__(self, scanner, filepath):
+    def __init__(self, scanner, filepath, repo):
         self.scanner = scanner
         self.filepath = filepath
+        self.repo = repo
         self.webhooks = self._load_webhooks()
         self.findings = self._load_findings()
 
@@ -58,6 +59,8 @@ class SlackNotifier:
                 return json.loads(content)
             elif self.scanner == "trufflehog":
                 return [json.loads(line) for line in content.strip().splitlines()]
+            elif self.scanner == "gitleaks":
+                return json.loads(content)
             else:
                 return []
         except Exception as e:
@@ -69,6 +72,8 @@ class SlackNotifier:
             return self._format_trivy(item)
         elif self.scanner == "trufflehog":
             return self._format_trufflehog(item)
+        elif self.scanner == "gitleaks":
+            return self._format_gitleaks(item)
         return None
 
     def _format_trivy(self, data):
@@ -156,6 +161,50 @@ class SlackNotifier:
             return f"*🐷 TruffleHog Secret Finding*\nRepo: `{repo}`\nCommit: `{commit}`\nTimestamp:`{timestamp_str}`\nDetector: *{detector}*\nSecretHash: `{secret_hash}`\n🔍 <https://scanner-defectdojo.k8s.uat.sportybet2.com/reveal/trufflehog|Reveal Secret>"
         except Exception as e:
             return f"*🐷 TruffleHog Secret Finding*\n(Parsing error: {e})"
+
+    def _format_gitleaks(self, data):
+        try:
+            repo = self.repo
+            commit = data["Commit"]
+            rule_id = data["RuleID"]
+            description = data["Description"]
+            raw = data.get("Secret", "[REDACTED]")
+            secret_hash = hashlib.sha256(raw.encode()).hexdigest()
+            
+            conn = sqlite3.connect(SQLITE_PATH)
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT repos FROM trufflehog_secrets WHERE secret_hash = ?", (secret_hash,))
+            row = cursor.fetchone()
+            
+            if row is None:
+                # Not found, insert new
+                repos_json = json.dumps([repo])
+                cursor.execute("""
+                    INSERT INTO trufflehog_secrets (secret, secret_hash, repos)
+                    VALUES (?, ?, ?)
+                """, (raw, secret_hash, repos_json))
+                conn.commit()
+                conn.close()
+            else:
+                existing_repos = json.loads(row[0])
+                if repo not in existing_repos:
+                    # New repo for existing secret, update repo list
+                    existing_repos.append(repo)
+                    cursor.execute("""
+                        UPDATE trufflehog_secrets
+                        SET repos = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE secret_hash = ?
+                    """, (json.dumps(existing_repos), secret_hash))
+                    conn.commit()
+                    conn.close()
+                else:
+                    # Already known secret + repo → skip notification
+                    conn.close()
+                    return None
+            return f"*🔍 Gitleaks Secret Finding*\nRepo: `{repo}`\nCommit: `{commit}`\nRuleID: *{rule_id}*\nDescription: {description}\nSecretHash: `{secret_hash}`\n🔍 <https://scanner-defectdojo.k8s.uat.sportybet2.com/reveal/gitleaks|Reveal Secret>"
+        except Exception as e:
+            return f"*🔍 Gitleaks Secret Finding*\n(Parsing error: {e})"
 
     def send_notifications(self):
         if not self.webhooks:
@@ -319,6 +368,16 @@ def file_contains_trufflehog_findings(file_path):
         logger.warning(f"⚠️ Failed to inspect {file_path}: {e}")
     return False
 
+def file_contains_gitleaks_findings(file_path):
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list) and len(data) > 0:
+                return True
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to inspect {file_path}: {e}")
+    return False
+
 def file_contains_findings(file_path, scanner):
     if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
         return False
@@ -327,6 +386,8 @@ def file_contains_findings(file_path, scanner):
         return file_contains_trufflehog_findings(file_path)
     elif scanner == "trivy":
         return file_contains_trivy_findings(file_path)
+    elif scanner == "gitleaks":
+        return file_contains_gitleaks_findings(file_path)
     else:
         logger.warning(f"⚠️ Unknown scanner type: {scanner}")
         return False
@@ -383,7 +444,7 @@ def process_upload_job(job):
 
         if success:
             logger.info(f"✅ Upload success: {file_path}")
-            notifier = SlackNotifier(scanner, file_path)
+            notifier = SlackNotifier(scanner, file_path, repo)
             notifier.send_notifications()
         else:
             logger.warning(f"⚠️ Upload failed: {file_path}")
