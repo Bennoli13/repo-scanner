@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from . import scanner_module
 from . import trivy_proc
 from . import trufflehog_proc 
+from . import gitleaks_proc
 from . import hash_manager
 from urllib.parse import urlparse
 
@@ -69,6 +70,8 @@ def scan_job_handler(data):
             trivy_proc.scan_and_upload_branch(auth_url, branch, repo_name, dojo_token, dojo_url, engagement_id, skip_dojo)
         elif scanner_name == "trufflehog":
             trufflehog_proc.scan_and_upload_branch(auth_url, branch, repo_name, dojo_token, dojo_url, engagement_id, skip_dojo)
+        elif scanner_name == "gitleaks":
+            gitleaks_proc.scan_and_upload_branch(auth_url, branch, repo_name, dojo_token, dojo_url, engagement_id, skip_dojo)
         else:
             logger.warning(f"Unknown scanner: {scanner_name}")
         mark_branch_scanned(API_BASE, job_id, branch)

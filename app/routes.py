@@ -15,7 +15,7 @@ import hmac
 import hashlib
 
 FILE_UPLOAD_BASE= "/app/files"
-SCANNERS = ["trufflehog", "trivy"]
+SCANNERS = ["trufflehog", "trivy", "gitleaks"]
 main = Blueprint("main", __name__)
 
 # ------------------------------

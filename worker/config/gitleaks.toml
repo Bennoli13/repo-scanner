@@ -1,0 +1,42 @@
+title = "Gitleaks: default + custom"
+
+# Pull in the built-in rule set too
+[extend]
+useDefault = false
+# (Optional) pin to an exact upstream config instead of the embedded defaults:
+# urls = ["https://raw.githubusercontent.com/gitleaks/gitleaks/v8.18.4/config/gitleaks.toml"]
+
+# --- Your custom rule(s) below ---
+
+# Flag password-like keys whose value is NOT encrypted/templated.
+# Skips values that begin with ENC[ or ${ or {{ or [ or {,
+# or contain { / [ anywhere on the RHS. Quotes around values are ignored.
+
+[[rules]]
+id = "unencrypted-password-config"
+description = "Password-like key with a non-ENC/non-templated value"
+# Match any key containing pass|password, then :=, then some value
+regex = '''(?mi)^\s*[A-Za-z0-9_.-]*(?:pass|password)[A-Za-z0-9_.-]*\s*[:=]\s*.+'''
+# Scan common config/templates
+path  = '''\.(ya?ml|properties|env|conf|json|tpl|gotmpl|tfvars)$'''
+
+# Allowlist (exclude) cases we consider safe/templated/encrypted
+[rules.allowlist]
+regexes = [
+  # Value starts with ENC[  OR  ${  OR  {{  OR  [  OR  {
+  '''(?mi)^\s*[A-Za-z0-9_.-]*(?:pass|password)[A-Za-z0-9_.-]*\s*[:=]\s*["']?\s*(?:ENC\[|\$\{|\{\{|\[|\{)''',
+  # Or value contains { or [ anywhere on the RHS (e.g., Helm templates)
+  '''(?mi)^\s*[A-Za-z0-9_.-]*(?:pass|password)[A-Za-z0-9_.-]*\s*[:=][^#\n]*(\{|\[)'''
+]
+
+[[rules]]
+id = "jdbcPassword-explicit"
+description = "Explicit jdbcPassword with a non-ENC/non-templated value"
+regex = '''(?mi)^\s*jdbcPassword\s*[:=]\s*.+'''
+path  = '''\.(ya?ml|properties|env|conf)$'''
+
+[rules.allowlist]
+regexes = [
+  '''(?mi)^\s*jdbcPassword\s*[:=]\s*["']?\s*(?:ENC\[|\$\{|\{\{|\[|\{)''',
+  '''(?mi)^\s*jdbcPassword\s*[:=][^#\n]*(\{|\[)'''
+]

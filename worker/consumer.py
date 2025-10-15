@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 #scanner
 from . import trufflehog_proc
 from . import trivy_proc
+from . import gitleaks_proc
 
 logging.basicConfig(
     level=logging.INFO,
@@ -147,6 +148,8 @@ def process_webhook_job(ch, method, properties, body):
             trufflehog_proc.main_webhook(job)
         elif scanner == "trivy":
             trivy_proc.main_webhook(job)
+        elif scanner == "gitleaks":
+            gitleaks_proc.main_webhook(job)
         else:
             raise Exception(f"Unknown scanner: {scanner}")
 
