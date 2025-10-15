@@ -5,9 +5,11 @@ WORKDIR /app
 # Install system dependencies & Trivy
 RUN apt-get update && \
     apt-get upgrade -y && \
-    apt-get install -y wget curl git && \
-    wget https://github.com/aquasecurity/trivy/releases/download/v0.18.3/trivy_0.18.3_Linux-64bit.deb && \
-    dpkg -i trivy_0.18.3_Linux-64bit.deb && \
+    apt-get install -y wget curl git gnupg && \
+    wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | tee /usr/share/keyrings/trivy.gpg > /dev/null && \
+    echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | tee -a /etc/apt/sources.list.d/trivy.list && \
+    apt-get update && \
+    apt-get install trivy && \
     trivy fs --download-db-only && \
     trivy fs --download-java-db-only && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
