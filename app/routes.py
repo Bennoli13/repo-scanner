@@ -47,7 +47,7 @@ def scan():
 
 @main.route("/result/<scanner>")
 def view_results(scanner):
-    if scanner not in ["trufflehog", "trivy"]:
+    if scanner not in ["trufflehog", "trivy", "gitleaks"]:
         return "Invalid scanner", 404
 
     folder = os.path.join("files", scanner)
