@@ -49,17 +49,30 @@ def scan_repo(repo_url, branch, repo_name, output_file):
     # 3. Run Gitleaks scan in fs mode
     logger.info(f"🔍 Running Gitleaks scan on {repo_name} (branch: {branch})...")
     scan_cmd = [
-        "gitleaks", "detect", repo_path, "--report-format", "json", "--report-path", output_file,
+        "gitleaks", "detect", "--source", repo_path, "--report-format", "json", "--report-path", output_file,
         "--config", "/app/worker/config/gitleaks.toml"
     ]
     scan_result = subprocess.run(scan_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     # 4. Clean up
     shutil.rmtree(temp_dir)
+    
+    try:
+        size = os.path.getsize(output_file)
+    except OSError:
+        size = 0
+    
+    logger.info("gitleaks exit=%s, stdout bytes=%d, stderr bytes=%d, report size=%d",
+            scan_result.returncode, len(scan_result.stdout), len(scan_result.stderr), size)
 
-    #if scan_result.returncode != 0:
-    #    logger.error(f"❌ Gitleaks scan failed for {repo_name}: {scan_result.stderr}")
-    #    return False, output_file
+    if scan_result.returncode == 0:
+        logger.info("✅ No leaks found.")
+        return False, output_file
+    elif scan_result.returncode == 1:
+        logger.warning("⚠️ Leaks detected!")
+    else:
+        logger.error(f"❌ Gitleaks error (exit code {scan_result.returncode})")
+        return False, output_file
 
     logger.info(f"✅ Gitleaks scan complete: {output_file}")
     return True, output_file
