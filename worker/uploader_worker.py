@@ -192,6 +192,10 @@ class SlackNotifier:
                 desc = it.get("Description", "")
                 examples.append(f"- `{file}:{line}` • *{rule}* — {desc}\n |__hash: `{secret_hash}`")
 
+        #return None if all secrets are known (no examples)
+        if len(examples) == 0:
+            return None
+        
         top_rules = sorted(by_rule.items(), key=lambda x: x[1], reverse=True)[:5]
         top_files = sorted(by_file.items(), key=lambda x: x[1], reverse=True)[:5]
 
@@ -239,10 +243,14 @@ class SlackNotifier:
             by_detector[det] = by_detector.get(det, 0) + 1
             git = (((it.get("SourceMetadata") or {}).get("Data") or {}).get("Git") or {})
             path = git.get("file", "unknown")
-            by_file[path] = by_file.get(path, 0) + 1
+            by_file[path] = by_file.get(path, 0) + 1            
 
             if should_notify and len(examples) < max_examples:
                 examples.append(f"- `{path}` • *{det}*\n |__hash: `{secret_hash}`")
+        
+        #return None if all secrets are known (no examples)
+        if len(examples) == 0:
+            return None
 
         top_det = sorted(by_detector.items(), key=lambda x: x[1], reverse=True)[:5]
         top_files = sorted(by_file.items(), key=lambda x: x[1], reverse=True)[:5]
