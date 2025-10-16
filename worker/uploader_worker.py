@@ -119,7 +119,7 @@ class SlackNotifier:
         column = {
             "trivy": "notify_trivy",
             "trufflehog": "notify_trufflehog",
-            "gitleaks": "notify_gitleaks",
+            "gitleaks": "notify_trufflehog",
         }.get(self.scanner, None)
 
         if not column:
