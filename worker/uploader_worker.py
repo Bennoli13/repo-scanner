@@ -190,13 +190,13 @@ class SlackNotifier:
             if should_notify and len(examples) < max_examples:
                 line = it.get("StartLine") or it.get("Line") or "?"
                 desc = it.get("Description", "")
-                examples.append(f"- `{file}:{line}` • *{rule}* — {desc} • hash `{secret_hash[:12]}…`")
+                examples.append(f"- `{file}:{line}` • *{rule}* — {desc}\n |__hash: `{secret_hash}`")
 
         top_rules = sorted(by_rule.items(), key=lambda x: x[1], reverse=True)[:5]
         top_files = sorted(by_file.items(), key=lambda x: x[1], reverse=True)[:5]
 
         commit_short = commit[:8] if commit and commit != "scan" else commit
-        header = f"*🔍 Gitleaks Summary*  |  Repo: `{self.repo}`  |  Commit: `{commit_short}`"
+        header = f"*🔍 Gitleaks Summary*  |  Repo: `{self.repo}`  |  Commit: `{commit}`"
         counts = f"*Findings:* {len(items)}  |  *Rules:* {len(by_rule)}  |  *Files:* {len(by_file)}"
 
         parts = [header, counts]
@@ -237,13 +237,13 @@ class SlackNotifier:
             by_file[path] = by_file.get(path, 0) + 1
 
             if should_notify and len(examples) < max_examples:
-                examples.append(f"- `{path}` • *{det}* • hash `{secret_hash[:12]}…`")
+                examples.append(f"- `{path}` • *{det}*\n |__hash: `{secret_hash}`")
 
         top_det = sorted(by_detector.items(), key=lambda x: x[1], reverse=True)[:5]
         top_files = sorted(by_file.items(), key=lambda x: x[1], reverse=True)[:5]
 
         commit_short = commit[:8] if commit and commit != "scan" else commit
-        header = f"*🐷 TruffleHog Summary*  |  Repo: `{self.repo}`  |  Commit: `{commit_short}`"
+        header = f"*🐷 TruffleHog Summary*  |  Repo: `{self.repo}`  |  Commit: `{commit}`"
         counts = f"*Findings:* {len(items)}  |  *Detectors:* {len(by_detector)}  |  *Files:* {len(by_file)}"
 
         parts = [header, counts]
