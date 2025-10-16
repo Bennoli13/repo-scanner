@@ -197,9 +197,10 @@ class SlackNotifier:
 
         commit_short = commit[:8] if commit and commit != "scan" else commit
         header = f"*🔍 Gitleaks Summary*  |  Repo: `{self.repo}`  |  Commit: `{commit}`"
+        header_info = f"Author: {items[0].get('Author','?')} | Date: {items[0].get('Date','?')}"
         counts = f"*Findings:* {len(items)}  |  *Rules:* {len(by_rule)}  |  *Files:* {len(by_file)}"
 
-        parts = [header, counts]
+        parts = [header, header_info, counts]
 
         if top_rules:
             parts.append("\n*Top Rules:*")
@@ -244,9 +245,10 @@ class SlackNotifier:
 
         commit_short = commit[:8] if commit and commit != "scan" else commit
         header = f"*🐷 TruffleHog Summary*  |  Repo: `{self.repo}`  |  Commit: `{commit}`"
+        header_info = f"Author Email: {git.get('email','?')} | Date: {git.get('timestamp','?')}"
         counts = f"*Findings:* {len(items)}  |  *Detectors:* {len(by_detector)}  |  *Files:* {len(by_file)}"
 
-        parts = [header, counts]
+        parts = [header, header_info, counts]
 
         if top_det:
             parts.append("\n*Top Detectors:*")
