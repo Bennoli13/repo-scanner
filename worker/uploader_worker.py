@@ -201,6 +201,10 @@ class SlackNotifier:
         counts = f"*Findings:* {len(items)}  |  *Rules:* {len(by_rule)}  |  *Files:* {len(by_file)}"
 
         parts = [header, header_info, counts]
+        
+        #return None if author is jenkins
+        if items[0].get('Author','?').lower() == 'jenkins':
+            return None
 
         if top_rules:
             parts.append("\n*Top Rules:*")
@@ -333,7 +337,10 @@ class SlackNotifier:
 
             for name, url in self.webhooks:
                 try:
-                    requests.post(url, json={"text": text}, timeout=10)
+                    if text != None:
+                        requests.post(url, json={"text": text}, timeout=10)
+                    else:
+                        logger.warning(f"[SlackNotifier] No text to send for '{name}'")
                 except Exception as e:
                     logger.warning(f"[SlackNotifier] Failed to send to '{name}': {e}")
 ############
