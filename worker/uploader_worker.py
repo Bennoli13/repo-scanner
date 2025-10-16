@@ -4,7 +4,7 @@ import os
 import time
 import logging
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from cryptography.fernet import Fernet
 from scanner_module import upload_to_defectdojo
 from hash_manager import HashManager
@@ -227,30 +227,46 @@ class SlackNotifier:
         parts.append("\n🔎 <https://scanner-defectdojo.k8s.uat.sportybet2.com/reveal/trufflehog|Reveal Secret>")
         return "\n".join(parts)
 
+    
     def _summarize_trufflehog(self, commit, items, max_examples=5):
-        # Record secrets and build aggregates
         by_detector, by_file = {}, {}
         examples = []
+
+        git = None
+        latest_timestamp = None
 
         for it in items:
             raw = it.get("Raw", "[REDACTED]")
             should_notify, secret_hash = upsert_secret_and_decide_notify(self.repo, raw)
-            # If you want to filter out already-known secrets from the summary,
-            # skip adding them to examples when should_notify is False.
-            # I’ll still count occurrences in totals for visibility.
 
             det = it.get("DetectorName", "unknown")
             by_detector[det] = by_detector.get(det, 0) + 1
             git = (((it.get("SourceMetadata") or {}).get("Data") or {}).get("Git") or {})
             path = git.get("file", "unknown")
-            by_file[path] = by_file.get(path, 0) + 1            
+            by_file[path] = by_file.get(path, 0) + 1
+
+            # parse timestamp for filtering
+            ts_str = git.get("timestamp")
+            if ts_str:
+                try:
+                    ts = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S %z")
+                    if not latest_timestamp or ts > latest_timestamp:
+                        latest_timestamp = ts
+                except Exception:
+                    pass
 
             if should_notify and len(examples) < max_examples:
                 examples.append(f"- `{path}` • *{det}*\n |__hash: `{secret_hash}`")
-        
-        #return None if all secrets are known (no examples)
+
+        # 🚫 skip if no new secrets
         if len(examples) == 0:
             return None
+
+        # 🚫 skip if commit date older than 7 days
+        if latest_timestamp:
+            now = datetime.now(timezone.utc)
+            if now - latest_timestamp > timedelta(days=7):
+                return None
 
         top_det = sorted(by_detector.items(), key=lambda x: x[1], reverse=True)[:5]
         top_files = sorted(by_file.items(), key=lambda x: x[1], reverse=True)[:5]
@@ -276,7 +292,6 @@ class SlackNotifier:
             parts.append("\n*New/Updated in this repo (sample):*")
             parts.extend(examples)
 
-        # Use your reveal tool to show the raw only when needed
         parts.append("\n🔎 <https://scanner-defectdojo.k8s.uat.sportybet2.com/reveal/trufflehog|Reveal Secret>")
         return "\n".join(parts)
 
