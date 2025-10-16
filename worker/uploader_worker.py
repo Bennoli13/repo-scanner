@@ -29,9 +29,81 @@ API_BASE = os.getenv("API_BASE", "http://web:5000")
 fernet = Fernet(FERNET_KEY)
 hash_mgr = HashManager(api_base=API_BASE)
 
+def upsert_secret_and_decide_notify(repo: str, raw_secret: str) -> tuple[bool, str]:
+    """
+    Store (or update) the secret in the shared table and decide if we should notify.
 
-####NOTIFICATION####
+    Returns:
+      (should_notify, secret_hash)
+
+    Rules:
+      - First time we see a secret_hash -> insert row (repos=[repo]) -> notify
+      - If secret_hash exists:
+         - If repo NOT in repos -> append repo -> notify
+         - Else -> already known for that repo -> do NOT notify
+    """
+    secret_hash = hashlib.sha256(raw_secret.encode()).hexdigest()
+
+    conn = sqlite3.connect(SQLITE_PATH)
+    cursor = conn.cursor()
+
+    # Try insert first (fast path, uses UNIQUE on secret_hash)
+    repos_json = json.dumps([repo])
+    try:
+        cursor.execute(
+            """
+            INSERT INTO trufflehog_secrets (secret, secret_hash, repos)
+            VALUES (?, ?, ?)
+            """,
+            (raw_secret, secret_hash, repos_json)
+        )
+        conn.commit()
+        conn.close()
+        return True, secret_hash  # new secret entirely
+    except sqlite3.IntegrityError:
+        # Row already exists: update repos if needed
+        cursor.execute(
+            "SELECT repos FROM trufflehog_secrets WHERE secret_hash = ?",
+            (secret_hash,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            # rare race: treat as notify
+            conn.close()
+            return True, secret_hash
+
+        existing_repos = []
+        try:
+            existing_repos = json.loads(row[0]) if row[0] else []
+        except Exception:
+            existing_repos = []
+
+        if repo not in existing_repos:
+            existing_repos.append(repo)
+            cursor.execute(
+                """
+                UPDATE trufflehog_secrets
+                SET repos = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE secret_hash = ?
+                """,
+                (json.dumps(existing_repos), secret_hash)
+            )
+            conn.commit()
+            conn.close()
+            return True, secret_hash  # same secret, new repo -> notify
+
+        # Known secret + repo -> no notify
+        conn.close()
+        return False, secret_hash
+    
+#### NOTIFICATION (per-commit summaries) ####
 class SlackNotifier:
+    """
+    Sends 1 Slack message per 'execution':
+      - Gitleaks: per Commit (data[i]["Commit"])
+      - TruffleHog: per Commit (data["SourceMetadata"]["Data"]["Git"]["commit"])
+      - Trivy: single summary per scan file (no commit concept)
+    """
     def __init__(self, scanner, filepath, repo):
         self.scanner = scanner
         self.filepath = filepath
@@ -39,188 +111,229 @@ class SlackNotifier:
         self.webhooks = self._load_webhooks()
         self.findings = self._load_findings()
 
+    # ---------- data loading ----------
     def _load_webhooks(self):
         conn = sqlite3.connect(SQLITE_PATH)
         cursor = conn.cursor()
-        query = """
-            SELECT name, url FROM slack_webhook
-            WHERE is_active = 1 AND ({scanner_field} = 1)
-        """.format(scanner_field="notify_trivy" if self.scanner == "trivy" else "notify_trufflehog")
-        cursor.execute(query)
-        results = cursor.fetchall()
+        # Add your 'gitleaks' switch here too
+        column = {
+            "trivy": "notify_trivy",
+            "trufflehog": "notify_trufflehog",
+            "gitleaks": "notify_gitleaks",
+        }.get(self.scanner, None)
+
+        if not column:
+            conn.close()
+            return []
+
+        q = f"SELECT name, url FROM slack_webhook WHERE is_active = 1 AND {column} = 1"
+        cursor.execute(q)
+        rows = cursor.fetchall()
         conn.close()
-        return results
+        return rows
 
     def _load_findings(self):
         try:
             with open(self.filepath, "r", encoding="utf-8") as f:
                 content = f.read()
             if self.scanner == "trivy":
-                return json.loads(content)
+                return json.loads(content)  # dict with Results
             elif self.scanner == "trufflehog":
-                return [json.loads(line) for line in content.strip().splitlines()]
+                return [json.loads(line) for line in content.strip().splitlines() if line.strip()]
             elif self.scanner == "gitleaks":
-                return json.loads(content)
+                return json.loads(content)  # list of objects
             else:
                 return []
         except Exception as e:
-            print(f"[SlackNotifier] ❌ Failed to read findings: {e}")
+            logger.warning(f"[SlackNotifier] Failed to read findings: {e}")
             return []
 
-    def _format_message(self, item):
+    # ---------- grouping ----------
+    def _group_by_commit(self):
+        """Return dict: {commit_hash: [findings]} for gitleaks/trufflehog; {'scan': [...]} for trivy."""
+        if self.scanner == "gitleaks":
+            groups = {}
+            for item in (self.findings or []):
+                commit = (item.get("Commit") or "").strip() or "unknown"
+                groups.setdefault(commit, []).append(item)
+            return groups
+
+        if self.scanner == "trufflehog":
+            groups = {}
+            for item in (self.findings or []):
+                git = (((item.get("SourceMetadata") or {}).get("Data") or {}).get("Git") or {})
+                commit = (git.get("commit") or "").strip() or "unknown"
+                groups.setdefault(commit, []).append(item)
+            return groups
+
         if self.scanner == "trivy":
-            return self._format_trivy(item)
-        elif self.scanner == "trufflehog":
-            return self._format_trufflehog(item)
-        elif self.scanner == "gitleaks":
-            return self._format_gitleaks(item)
-        return None
+            # Trivy JSON is one scan result (no commit notion). Use single bucket.
+            return {"scan": self.findings}
 
-    def _format_trivy(self, data):
-        def severity_emoji(sev):
-            return {
-                "CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🔵", "UNKNOWN": "⚪"
-            }.get(sev.upper(), "⚪")
+        return {}
 
-        def truncate(text, limit=100):
-            return text if len(text) <= limit else text[:limit].rstrip() + "..."
+    # ---------- summaries ----------
+    def _summarize_gitleaks(self, commit, items, max_examples=5):
+        by_rule, by_file = {}, {}
+        examples = []
 
-        msg_parts = [f"*🔍 Trivy Finding*\nTarget: `{data.get('Target', 'Unknown')}`"]
+        for it in items:
+            # Store/update in shared table by hash
+            raw = it.get("Secret", "[REDACTED]") or ""
+            should_notify, secret_hash = upsert_secret_and_decide_notify(self.repo, raw)
 
-        for category, icon in [
-            ("Vulnerabilities", "🛡️"),
-            ("Misconfigurations", "⚠️"),
-            ("Secrets", "🔑"),
-            ("Licenses", "📄")
-        ]:
-            if category in data:
-                msg_parts.append(f"\n*{icon} {category}:*")
-                for item in data[category]:
-                    if category == "Vulnerabilities":
-                        emoji = severity_emoji(item.get("Severity", "UNKNOWN"))
-                        title = truncate(item.get("Title", item.get("VulnerabilityID", "")))
-                        msg_parts.append(f"- {emoji} *{item['VulnerabilityID']}* in `{item.get('PkgName', 'unknown')}`: {title}")
-                    elif category == "Misconfigurations":
-                        emoji = severity_emoji(item.get("Severity", "UNKNOWN"))
-                        title = truncate(item.get("Title", item.get("ID", "")))
-                        msg_parts.append(f"- {emoji} *{item['ID']}*: {title}")
-                    elif category == "Secrets":
-                        msg_parts.append(f"- *{item.get('RuleID', 'Unknown')}*: {truncate(item.get('Title', 'Secret found'))}")
-                    elif category == "Licenses":
-                        msg_parts.append(f"- `{item.get('PkgName', 'unknown')}` uses license: *{item.get('License', 'Unknown')}*")
+            rule = it.get("RuleID", "unknown")
+            file = it.get("File", "unknown")
+            by_rule[rule] = by_rule.get(rule, 0) + 1
+            by_file[file] = by_file.get(file, 0) + 1
 
-        return "\n".join(msg_parts) if len(msg_parts) > 1 else None
+            if should_notify and len(examples) < max_examples:
+                line = it.get("StartLine") or it.get("Line") or "?"
+                desc = it.get("Description", "")
+                examples.append(f"- `{file}:{line}` • *{rule}* — {desc} • hash `{secret_hash[:12]}…`")
 
-    def _format_trufflehog(self, data):
-        try:
-            git_data = data["SourceMetadata"]["Data"]["Git"]
-            commit = git_data["commit"]
-            repo =git_data["repository"]
-            raw = data.get("Raw", "[REDACTED]")
-            secret_hash = hashlib.sha256(raw.encode()).hexdigest()
-            detector = data.get("DetectorName", "Unknown")
-            
-            # ⏱️ Parse and filter by timestamp (must be within 7 days)
-            timestamp_str = git_data.get("timestamp")  # "2024-11-19 07:36:45 +0000"
-            timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S %z")
-            now_utc = datetime.now(tz=timestamp.tzinfo)
-            
-            conn = sqlite3.connect(SQLITE_PATH)
-            cursor = conn.cursor()
-            
-            cursor.execute("SELECT repos FROM trufflehog_secrets WHERE secret_hash = ?", (secret_hash,))
-            row = cursor.fetchone()
-            
-            if row is None:
-                # Not found, insert new
-                repos_json = json.dumps([repo])
-                cursor.execute("""
-                    INSERT INTO trufflehog_secrets (secret, secret_hash, repos)
-                    VALUES (?, ?, ?)
-                """, (raw, secret_hash, repos_json))
-                conn.commit()
-                conn.close()
-            else:
-                existing_repos = json.loads(row[0])
-                if repo not in existing_repos:
-                    # New repo for existing secret, update repo list
-                    existing_repos.append(repo)
-                    cursor.execute("""
-                        UPDATE trufflehog_secrets
-                        SET repos = ?, updated_at = CURRENT_TIMESTAMP
-                        WHERE secret_hash = ?
-                    """, (json.dumps(existing_repos), secret_hash))
-                    conn.commit()
-                    conn.close()
-                else:
-                    # Already known secret + repo → skip notification
-                    conn.close()
-                    return None
-            if now_utc - timestamp > timedelta(days=7):
-                return None  # Skip old secrets
-            return f"*🐷 TruffleHog Secret Finding*\nRepo: `{repo}`\nCommit: `{commit}`\nTimestamp:`{timestamp_str}`\nDetector: *{detector}*\nSecretHash: `{secret_hash}`\n🔍 <https://scanner-defectdojo.k8s.uat.sportybet2.com/reveal/trufflehog|Reveal Secret>"
-        except Exception as e:
-            return f"*🐷 TruffleHog Secret Finding*\n(Parsing error: {e})"
+        top_rules = sorted(by_rule.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_files = sorted(by_file.items(), key=lambda x: x[1], reverse=True)[:5]
 
-    def _format_gitleaks(self, data):
-        try:
-            repo = self.repo
-            commit = data["Commit"]
-            rule_id = data["RuleID"]
-            description = data["Description"]
-            raw = data.get("Secret", "[REDACTED]")
-            secret_hash = hashlib.sha256(raw.encode()).hexdigest()
-            
-            conn = sqlite3.connect(SQLITE_PATH)
-            cursor = conn.cursor()
-            
-            cursor.execute("SELECT repos FROM trufflehog_secrets WHERE secret_hash = ?", (secret_hash,))
-            row = cursor.fetchone()
-            
-            if row is None:
-                # Not found, insert new
-                repos_json = json.dumps([repo])
-                cursor.execute("""
-                    INSERT INTO trufflehog_secrets (secret, secret_hash, repos)
-                    VALUES (?, ?, ?)
-                """, (raw, secret_hash, repos_json))
-                conn.commit()
-                conn.close()
-            else:
-                existing_repos = json.loads(row[0])
-                if repo not in existing_repos:
-                    # New repo for existing secret, update repo list
-                    existing_repos.append(repo)
-                    cursor.execute("""
-                        UPDATE trufflehog_secrets
-                        SET repos = ?, updated_at = CURRENT_TIMESTAMP
-                        WHERE secret_hash = ?
-                    """, (json.dumps(existing_repos), secret_hash))
-                    conn.commit()
-                    conn.close()
-                else:
-                    # Already known secret + repo → skip notification
-                    conn.close()
-                    return None
-            return f"*🔍 Gitleaks Secret Finding*\nRepo: `{repo}`\nCommit: `{commit}`\nRuleID: *{rule_id}*\nDescription: {description}\nSecretHash: `{secret_hash}`\n🔍 <https://scanner-defectdojo.k8s.uat.sportybet2.com/reveal/gitleaks|Reveal Secret>"
-        except Exception as e:
-            return f"*🔍 Gitleaks Secret Finding*\n(Parsing error: {e})"
+        commit_short = commit[:8] if commit and commit != "scan" else commit
+        header = f"*🔍 Gitleaks Summary*  |  Repo: `{self.repo}`  |  Commit: `{commit_short}`"
+        counts = f"*Findings:* {len(items)}  |  *Rules:* {len(by_rule)}  |  *Files:* {len(by_file)}"
 
-    def send_notifications(self):
+        parts = [header, counts]
+
+        if top_rules:
+            parts.append("\n*Top Rules:*")
+            for r, c in top_rules:
+                parts.append(f"• `{r}` — {c}")
+
+        if top_files:
+            parts.append("\n*Top Files:*")
+            for f, c in top_files:
+                parts.append(f"• `{f}` — {c}")
+
+        if examples:
+            parts.append("\n*New/Updated in this repo (sample):*")
+            parts.extend(examples)
+
+        parts.append("\n🔎 <https://scanner-defectdojo.k8s.uat.sportybet2.com/reveal/trufflehog|Reveal Secret>")
+        return "\n".join(parts)
+
+    def _summarize_trufflehog(self, commit, items, max_examples=5):
+        # Record secrets and build aggregates
+        by_detector, by_file = {}, {}
+        examples = []
+
+        for it in items:
+            raw = it.get("Raw", "[REDACTED]")
+            should_notify, secret_hash = upsert_secret_and_decide_notify(self.repo, raw)
+            # If you want to filter out already-known secrets from the summary,
+            # skip adding them to examples when should_notify is False.
+            # I’ll still count occurrences in totals for visibility.
+
+            det = it.get("DetectorName", "unknown")
+            by_detector[det] = by_detector.get(det, 0) + 1
+            git = (((it.get("SourceMetadata") or {}).get("Data") or {}).get("Git") or {})
+            path = git.get("file", "unknown")
+            by_file[path] = by_file.get(path, 0) + 1
+
+            if should_notify and len(examples) < max_examples:
+                examples.append(f"- `{path}` • *{det}* • hash `{secret_hash[:12]}…`")
+
+        top_det = sorted(by_detector.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_files = sorted(by_file.items(), key=lambda x: x[1], reverse=True)[:5]
+
+        commit_short = commit[:8] if commit and commit != "scan" else commit
+        header = f"*🐷 TruffleHog Summary*  |  Repo: `{self.repo}`  |  Commit: `{commit_short}`"
+        counts = f"*Findings:* {len(items)}  |  *Detectors:* {len(by_detector)}  |  *Files:* {len(by_file)}"
+
+        parts = [header, counts]
+
+        if top_det:
+            parts.append("\n*Top Detectors:*")
+            for d, c in top_det:
+                parts.append(f"• `{d}` — {c}")
+
+        if top_files:
+            parts.append("\n*Top Files:*")
+            for f, c in top_files:
+                parts.append(f"• `{f}` — {c}")
+
+        if examples:
+            parts.append("\n*New/Updated in this repo (sample):*")
+            parts.extend(examples)
+
+        # Use your reveal tool to show the raw only when needed
+        parts.append("\n🔎 <https://scanner-defectdojo.k8s.uat.sportybet2.com/reveal/trufflehog|Reveal Secret>")
+        return "\n".join(parts)
+
+    def _summarize_trivy(self, items, max_examples=5):
+        # Aggregate from {"Results":[...]}; handle empty safely
+        results = (items or {}).get("Results", [])
+        vulns = miscfg = secrets = licenses = 0
+        sev_counts = {}
+        examples = []
+
+        for r in results:
+            for v in r.get("Vulnerabilities", []) or []:
+                vulns += 1
+                sev = (v.get("Severity") or "UNKNOWN").upper()
+                sev_counts[sev] = sev_counts.get(sev, 0) + 1
+                if len(examples) < max_examples:
+                    examples.append(f"- {sev} `{v.get('VulnerabilityID','')}` in `{v.get('PkgName','?')}`")
+
+            for m in r.get("Misconfigurations", []) or []:
+                miscfg += 1
+            for s in r.get("Secrets", []) or []:
+                secrets += 1
+            for l in r.get("Licenses", []) or []:
+                licenses += 1
+
+        header = f"*🛡️ Trivy Summary*  |  Target: `{self.repo}`"
+        sev_line = ", ".join([f"{k}:{v}" for k, v in sorted(sev_counts.items())]) or "none"
+        counts = f"*Vulns:* {vulns} (by severity: {sev_line})  |  *Misconfig:* {miscfg}  |  *Secrets:* {secrets}  |  *Licenses:* {licenses}"
+
+        parts = [header, counts]
+        if examples:
+            parts.append("\n*Examples:*")
+            parts.extend(examples)
+
+        # no specific reveal page here; keep generic or add your own
+        return "\n".join(parts)
+
+    # ---------- send ----------
+    def send_summary(self, preferred_commit: str | None = None):
         if not self.webhooks:
-            print("[SlackNotifier] ⚠️ No active webhooks configured.")
+            logger.info("[SlackNotifier] No active webhooks configured for this scanner.")
             return
 
-        for finding in self.findings:
-            msg = self._format_message(finding)
-            if not msg:
+        groups = self._group_by_commit()
+        if not groups:
+            logger.info("[SlackNotifier] No findings to summarize.")
+            return
+
+        # If caller knows which commit (e.g., webhook), optionally narrow to that
+        if preferred_commit and preferred_commit in groups:
+            groups = {preferred_commit: groups[preferred_commit]}
+
+        # Build one message per grouped commit (or one 'scan' for Trivy)
+        for commit, items in groups.items():
+            if not items:
+                continue
+
+            if self.scanner == "gitleaks":
+                text = self._summarize_gitleaks(commit, items)
+            elif self.scanner == "trufflehog":
+                text = self._summarize_trufflehog(commit, items)
+            elif self.scanner == "trivy":
+                text = self._summarize_trivy(items)
+            else:
                 continue
 
             for name, url in self.webhooks:
                 try:
-                    requests.post(url, json={"text": msg})
+                    requests.post(url, json={"text": text}, timeout=10)
                 except Exception as e:
-                    print(f"[SlackNotifier] ❌ Failed to send to '{name}': {e}")
+                    logger.warning(f"[SlackNotifier] Failed to send to '{name}': {e}")
 ############
 
 def decrypt_token(token_encrypted: str) -> str:
@@ -445,7 +558,9 @@ def process_upload_job(job):
         if success:
             logger.info(f"✅ Upload success: {file_path}")
             notifier = SlackNotifier(scanner, file_path, repo)
-            notifier.send_notifications()
+            # If your job payload includes a commit hash, you can pass it to narrow the summary:
+            preferred_commit = None
+            notifier.send_summary(preferred_commit)
         else:
             logger.warning(f"⚠️ Upload failed: {file_path}")
 
